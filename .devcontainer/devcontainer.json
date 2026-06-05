@@ -21,7 +21,8 @@
                 "clangd.serverCompletionRanking": true,
                 "clangd.arguments": [
                     "--query-driver=/usr/bin/arm-none-eabi-*",
-                    "--compile-commands-dir=/workspace/build"
+                    "--compile-commands-dir=/workspace/build/*",
+                    "--background-index",
                 ],
                 "cortex-debug.armToolchainPath":"/usr/bin"
             }
