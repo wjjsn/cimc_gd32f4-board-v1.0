@@ -37,13 +37,13 @@ namespace Params
 	{
 		switch (code)
 		{
-			case 11:
+			case 0x11:
 				return 4800;
-			case 12:
+			case 0x12:
 				return 9600;
-			case 13:
+			case 0x13:
 				return 19200;
-			case 14:
+			case 0x14:
 				return 115200;
 			default:
 				return 19200;
@@ -56,15 +56,15 @@ namespace Params
 		switch (baud)
 		{
 			case 4800:
-				return 11;
+				return 0x11;
 			case 9600:
-				return 12;
+				return 0x12;
 			case 19200:
-				return 13;
+				return 0x13;
 			case 115200:
-				return 14;
+				return 0x14;
 			default:
-				return 13;
+				return 0x13;
 		}
 	}
 
@@ -86,7 +86,7 @@ namespace Params
 	{
 		g_params.magic			 = PARAM_MAGIC;
 		g_params.device_id		 = 0x0001;
-		g_params.baudrate_code	 = 13; // 19200
+		g_params.baudrate_code	 = 0x13; // 19200
 		g_params.reserved0		 = 0;
 		g_params.ch0_ratio		 = 1.0f;
 		g_params.ch1_ratio		 = 1.0f;

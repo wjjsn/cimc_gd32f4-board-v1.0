@@ -208,7 +208,7 @@ namespace CmdDispatch
 		if (clen >= 1)
 		{
 			uint8_t code = frame_content(f)[0];
-			if (code >= 11 && code <= 14)
+			if (code >= 0x11 && code <= 0x14)
 			{
 				Params::g_params.baudrate_code = code;
 				Params::save();
