@@ -1,0 +1,10 @@
+services:
+  arm-none-eabi-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+
+    volumes:
+      - ..:/workspace:cached
+    command: /bin/sh -c "tail -f /dev/null"

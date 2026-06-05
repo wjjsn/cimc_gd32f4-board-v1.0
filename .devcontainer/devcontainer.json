@@ -1,0 +1,30 @@
+{
+    "name": "arm-none-eabi-dev",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "arm-none-eabi-dev",
+    "workspaceFolder": "/workspace",
+    "shutdownAction": "stopCompose",
+    "containerEnv": {
+        "http_proxy": "http://127.0.0.1:7890",
+        "https_proxy": "http://127.0.0.1:7890"
+    },
+    "remoteUser": "ubuntu",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+               "llvm-vs-code-extensions.vscode-clangd",
+               "marus25.cortex-debug"
+            ],
+            "settings": {
+                "clangd.path": "clangd",
+                "clangd.checkUpdates": false,
+                "clangd.serverCompletionRanking": true,
+                "clangd.arguments": [
+                    "--query-driver=/usr/bin/arm-none-eabi-*",
+                    "--compile-commands-dir=/workspace/build"
+                ],
+                "cortex-debug.armToolchainPath":"/usr/bin"
+            }
+        }
+    }
+}

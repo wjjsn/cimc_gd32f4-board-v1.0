@@ -1,0 +1,41 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug: APP",
+            "cwd": "${workspaceFolder}",
+            "executable": "APP/build/APP.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "runToEntryPoint": "Reset_Handler",
+            "servertype": "external",
+            "gdbTarget": "127.0.0.1:50000",
+            "liveWatch": {
+                "enabled": false,
+                "samplesPerSecond": 4
+            },
+            "postLaunchCommands": [
+                "source APP/init.gdb"
+            ]
+        },
+        {
+            "name": "Debug: bootloader",
+            "cwd": "${workspaceFolder}",
+            "executable": "BootLoader/build/bootloader.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "runToEntryPoint": "main",
+            "servertype": "external",
+            "gdbTarget": "127.0.0.1:50000",
+            "liveWatch": {
+                "enabled": false,
+                "samplesPerSecond": 4
+            },
+            "postLaunchCommands": [
+                "monitor reset 0",
+                "load",
+                "monitor reset 0"
+            ]
+        }
+    ]
+}
