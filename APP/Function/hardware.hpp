@@ -3,13 +3,17 @@
 #include "hal.hpp"
 #include "gd30ad3340.hpp"
 #include "OLED/ssd1306/0.91.hpp"
-using LED = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOE_ADDR,
+using system_status_led = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOE_ADDR,
 							  GPIO_PIN_3,
 							  GPIO_MODE_OUTPUT,
 							  GPIO_PUPD_PULLDOWN,
 							  HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP,
 														GPIO_OSPEED_2MHZ,
 														SET>>;
+using work_status_led = HAL::gd32f4::GPIO<
+    HAL::gd32f4::registers::GPIOE_ADDR, GPIO_PIN_3, GPIO_MODE_OUTPUT,
+    GPIO_PUPD_PULLDOWN,
+    HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_2MHZ, SET>>;	
 
 using ADC0_CONFIG = HAL::gd32f4::ADC_config<HAL::gd32f4::registers::ADC0_ADDR,
 											ADC_ADCCK_PCLK2_DIV6>;

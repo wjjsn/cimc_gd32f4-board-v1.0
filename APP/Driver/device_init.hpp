@@ -13,7 +13,8 @@ extern Screen g_screen;
 inline void device_init_all()
 {
 	// LED
-	LED::init();
+	system_status_led::init();
+	work_status_led::init();
 
 	// I2C + OLED + 外部ADC
 	I2C0_SCL::init();
