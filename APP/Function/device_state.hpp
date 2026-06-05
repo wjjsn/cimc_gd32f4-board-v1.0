@@ -72,35 +72,35 @@ namespace DeviceState
 	/// 刷新 LED 指示灯
 	inline void led_update()
 	{
-		// 采集工作灯
-		if (g_is_sampling)
-		{
-			LED::set();
-		}
-		else
-		{
-			// 系统状态灯: 1s 闪烁 (500ms on, 500ms off)
-			// LED::set/clear 由外部 tick 控制
-		}
+		// // 采集工作灯
+		// if (g_is_sampling)
+		// {
+		// 	LED::set();
+		// }
+		// else
+		// {
+		// 	// 系统状态灯: 1s 闪烁 (500ms on, 500ms off)
+		// 	// LED::set/clear 由外部 tick 控制
+		// }
 	}
 
 	/// 系统 LED 闪烁 (每 500ms 调用一次)
 	inline void led_toggle()
 	{
-		if (g_is_sampling)
-		{
-			// 采集工作指示灯常亮
-			LED::set();
-		}
-		else
-		{
-			// 系统状态灯: 1s 闪烁 (500ms on, 500ms off)
-			g_led_on = !g_led_on;
-			if (g_led_on)
-				LED::set();
-			else
-				LED::clear();
-		}
+		// if (g_is_sampling)
+		// {
+		// 	// 采集工作指示灯常亮
+		// 	LED::set();
+		// }
+		// else
+		// {
+		// 	// 系统状态灯: 1s 闪烁 (500ms on, 500ms off)
+		// 	g_led_on = !g_led_on;
+		// 	if (g_led_on)
+		// 		LED::set();
+		// 	else
+		// 		LED::clear();
+		// }
 	}
 
 	// ===================== 采样数据 =====================
