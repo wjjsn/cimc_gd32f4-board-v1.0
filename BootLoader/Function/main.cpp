@@ -24,7 +24,8 @@ constexpr uint32_t STAGING_ADDR = 0x08051000;
 constexpr uint32_t APP_SIZE = 128 * 1024;
 constexpr uint32_t STAGING_SIZE = 128 * 1024;
 constexpr uint32_t SLICE_SIZE = 256;
-constexpr uint32_t MAGIC_WORD = 0x5AA5C33C;
+constexpr uint32_t MAGIC_WORD =
+	0x3CC3A55A; // ARM是小端序，《0x5AA5C33C》是错的;
 constexpr uint32_t BOOT_TIMEOUT_S = 5;
 constexpr uint32_t UPGRADE_TIMEOUT_S = 10;
 
@@ -33,9 +34,7 @@ constexpr uint32_t UPGRADE_TIMEOUT_S = 10;
 
 // ===================== 环形缓冲区 =====================
 chry_ringbuffer_t ctx_uart1_buffer;
-using uart1_buffer = Cherry_RingBuffer<&ctx_uart1_buffer, 128>;
-template <>
-std::array<uint8_t, 128> Cherry_RingBuffer<&ctx_uart1_buffer, 128>::pool_{};
+using uart1_buffer = Cherry_RingBuffer<&ctx_uart1_buffer, 8192>;
 
 // ===================== 协议解析器 =====================
 Protocol::Parser<uart1_buffer> g_proto;
@@ -162,11 +161,10 @@ static void jump_to_app()
 
 // ===================== 升级流程 =====================
 
-static void run_upgrade_mode()
+/// 等待 0502 命令 (准备传输固件), 在 UPGRADE_TIMEOUT_S 秒内轮询
+/// @return true = 收到 0502, false = 超时
+static bool wait_for_upgrade_command()
 {
-	send_with_485("using command to interrupt start Application\r\n");
-	bool started = false;
-
 	for (int sec = UPGRADE_TIMEOUT_S; sec >= 1; --sec) {
 		char msg[64];
 		snprintf(msg, sizeof(msg),
@@ -177,20 +175,33 @@ static void run_upgrade_mode()
 			Protocol::Frame f;
 			if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
 			    read_u16(&f.data[5]) == 0x0502) {
-				started = true;
-				goto recv_fw;
+				return true;
 			}
 		}
 	}
+	return false;
+}
 
-recv_fw:
-	if (!started) {
-		jump_to_app();
-		return;
+/// 将字节缓冲区按 word 写入 Flash, 自动补齐不足 4 字节的尾部 (pad 0xFF)
+static void flash_write_buffer(uint32_t addr, const uint8_t *data, uint32_t len)
+{
+	uint32_t aligned = (len + 3) & ~3u;
+	for (uint32_t i = 0; i < aligned; i += 4) {
+		uint32_t w =
+			data[i] |
+			((uint32_t)(i + 1 < len ? data[i + 1] : 0xFF) << 8) |
+			((uint32_t)(i + 2 < len ? data[i + 2] : 0xFF) << 16) |
+			((uint32_t)(i + 3 < len ? data[i + 3] : 0xFF) << 24);
+		flash_write_word(addr + i, w);
 	}
+}
 
-	uint16_t devid = Params::g_params.device_id;
-	send_ok(devid, 0x0502);
+/// 接收固件二进制数据到暂存区
+/// 超时条件: 最后字节到达后 5s 无新数据, 或暂存区写满
+/// @param[out] total_written  实际写入的字节数
+/// @return true = 魔术字校验通过
+static bool receive_firmware(uint32_t &total_written)
+{
 	flash_erase_range(STAGING_ADDR, STAGING_SIZE);
 
 	uint8_t sbuf[SLICE_SIZE];
@@ -202,24 +213,8 @@ recv_fw:
 			if (total < STAGING_SIZE) {
 				sbuf[spos++] = b;
 				if (spos >= SLICE_SIZE) {
-					for (uint32_t i = 0; i < SLICE_SIZE;
-					     i += 4)
-						flash_write_word(
-							STAGING_ADDR + total +
-								i,
-							sbuf[i] |
-								((uint32_t)
-									 sbuf[i +
-									      1]
-								 << 8) |
-								((uint32_t)
-									 sbuf[i +
-									      2]
-								 << 16) |
-								((uint32_t)
-									 sbuf[i +
-									      3]
-								 << 24));
+					flash_write_buffer(STAGING_ADDR + total,
+							   sbuf, SLICE_SIZE);
 					total += SLICE_SIZE;
 					spos = 0;
 				}
@@ -231,29 +226,56 @@ recv_fw:
 			break;
 	}
 
-	if (*(volatile uint32_t *)STAGING_ADDR == MAGIC_WORD) {
-		send_ok(devid, 0x0502);
-		while (1) {
-			Protocol::Frame f;
-			if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
-			    read_u16(&f.data[5]) == 0x0503) {
-				send_ok(read_u16(&f.data[2]), 0x0503);
-				flash_erase_range(APP_START_ADDR, APP_SIZE);
-				for (uint32_t off = 0; off < total; off += 4)
-					flash_write_word(
-						APP_START_ADDR + off,
-						*(volatile uint32_t
-							  *)(STAGING_ADDR +
-							     off));
-				break;
-			}
+	// 写入尾部不足 256 字节的剩余数据
+	if (spos > 0) {
+		flash_write_buffer(STAGING_ADDR + total, sbuf, spos);
+		total += spos;
+	}
+
+	total_written = total;
+	return (*(volatile uint32_t *)STAGING_ADDR == MAGIC_WORD);
+}
+
+/// 等待 0503 命令并执行固件搬运: 擦除 App 区 → 暂存区复制到 App 区
+static void execute_upgrade(uint16_t devid, uint32_t fw_size)
+{
+	send_ok(devid, 0x0502); // 魔术字校验通过, 应答 OK
+
+	while (1) {
+		Protocol::Frame f;
+		if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
+		    read_u16(&f.data[5]) == 0x0503) {
+			send_ok(read_u16(&f.data[2]), 0x0503);
+			flash_erase_range(APP_START_ADDR, APP_SIZE);
+			// 跳过魔术字(前4字节), 只搬运固件本体
+			uint32_t fw_body = (fw_size >= 4) ? (fw_size - 4) : 0;
+			uint32_t copy_end = (fw_body + 3) & ~3u;
+			for (uint32_t off = 0; off < copy_end; off += 4)
+				flash_write_word(
+					APP_START_ADDR + off,
+					*(volatile uint32_t *)(STAGING_ADDR +
+							       4 + off));
+			break;
 		}
+	}
+}
+
+static void run_upgrade_mode()
+{
+	send_with_485("using command to interrupt start Application\r\n");
+
+	if (!wait_for_upgrade_command()) {
+		jump_to_app();
+		return;
+	}
+
+	uint16_t devid = Params::g_params.device_id;
+	uint32_t fw_size = 0;
+
+	if (receive_firmware(fw_size)) {
+		execute_upgrade(devid, fw_size);
 	} else {
 		send_error(devid);
-		while (1) {
-			Protocol::Frame f;
-			poll_frame(f);
-		}
 	}
 
 	delay_ms(100);
