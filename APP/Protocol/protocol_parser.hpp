@@ -181,6 +181,11 @@ template <typename RingBuffer> class ProtocolParser {
 		if (head != 0xA5B6 || tail != 0xB6A5)
 			return ProtocolStatus::header_not_found;
 
+		// 先把二进制数据填入 out_frame, 后续即使校验失败也能提取设备 ID
+		out_frame.size = binary_len;
+		for (uint16_t i = 0; i < binary_len; ++i)
+			out_frame.data[i] = binary[i];
+
 		uint8_t content_len = binary[7];
 		uint16_t expected = 13 + content_len;
 		if (binary_len != expected)
@@ -194,10 +199,6 @@ template <typename RingBuffer> class ProtocolParser {
 			binary[10 + content_len];
 		if (calc_crc != recv_crc)
 			return ProtocolStatus::crc_error;
-
-		out_frame.size = binary_len;
-		for (uint16_t i = 0; i < binary_len; ++i)
-			out_frame.data[i] = binary[i];
 
 		return ProtocolStatus::frame_ready;
 	}

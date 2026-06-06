@@ -35,6 +35,8 @@ class StaticTimerManager {
 		bool fired = false;
 
 		// 使用编译期展开或循环来处理确定的数组
+
+
 		for (std::size_t i = 0; i < TimerCount; ++i) {
 			// 计算实际索引：从 currentIndex 开始，跳过已处理的
 			std::size_t idx = (currentIndex + i) % TimerCount;

@@ -207,7 +207,11 @@ class CommandHandler {
 			if (sz) send_frame(buf, sz);
 			break;
 		}
-		default: break;
+		default:
+			// 协议 4.5.7(2): 未定义命令字 → 回复错误应答帧
+			if (devid != 0xFFFF)
+				send_error(devid);
+			break;
 		}
 	}
 
@@ -448,7 +452,7 @@ class CommandHandler {
 				   baudrate_code_to_hz(params_.baudrate_code));
 		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
 
-		send_with_485("instrument wakeup\r\n");
+		send_with_485("instrument wakeup");
 	}
 
 	void cmd_get_thresholds(const ProtocolFrame &f) {
@@ -496,7 +500,7 @@ class CommandHandler {
 
 	void cmd_get_alarms(const ProtocolFrame &f) {
 		(void)f;
-		if (alarms_.record_count_ == 0) { send_with_485("empty\r\n"); return; }
+		if (alarms_.record_count_ == 0) { send_with_485("empty \r\n"); return; }
 		// 启动分批发送状态机: 每条记录独立发送, 间隔由 alarm_send_tick 控制
 		alarm_send_index_ = 0;
 		alarm_send_active_ = true;

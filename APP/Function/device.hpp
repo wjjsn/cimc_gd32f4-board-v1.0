@@ -89,7 +89,7 @@ template <typename RingBuffer> class Device {
 		case ProtocolStatus::invalid_hex:
 			if (frame.size >= 4) {
 				uint16_t devid = read_u16(&frame.data[2]);
-				if (devid != 0xFFFF && devid != params_.device_id)
+				if (devid != params_.device_id)
 					break;
 				send_error_frame(params_.device_id);
 			}
