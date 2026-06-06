@@ -45,6 +45,9 @@ using Scheduler = StaticTimerManager<
 	// 100ms: 自动上报
 	TaskConfig{ 100, [] { g_device.auto_report_tick(systick_tick_ms); } },
 
+	// 50ms: 告警分批发送驱动 (每条记录间隔 50ms)
+	TaskConfig{ 50, [] { g_device.alarm_send_tick(systick_tick_ms); } },
+
 	// 500ms: OLED 刷新
 	TaskConfig{ 500, [] { g_device.oled_update(); } },
 

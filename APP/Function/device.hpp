@@ -196,6 +196,11 @@ template <typename RingBuffer> class Device {
 		}
 	}
 
+	void alarm_send_tick(uint32_t systick_ms)
+	{
+		if (cmd_handler_) cmd_handler_->alarm_send_tick(systick_ms);
+	}
+
     private:
 	void params_set_defaults()
 	{
@@ -213,6 +218,8 @@ template <typename RingBuffer> class Device {
 	{
 		params_.crc32 = params_crc32_calc(reinterpret_cast<const uint8_t*>(&params_), sizeof(DeviceParams) - 4);
 		flash_param_save(params_);
+		// 恢复告警数据 (params_save 擦除了整个扇区)
+		alarms_.save_to_flash();
 	}
 	void load_params()
 	{

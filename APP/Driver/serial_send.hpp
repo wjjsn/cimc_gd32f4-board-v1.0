@@ -28,6 +28,14 @@ inline void send_with_485(const char *str)
 	CS_485::clear();
 }
 
+/// 发送指定长度的原始 ASCII 数据 (不依赖 strlen)
+inline void send_raw_485(const uint8_t *data, uint16_t len)
+{
+	CS_485::set();
+	USART1::transmit(data, len);
+	CS_485::clear();
+}
+
 /// 运行时切换波特率 (HAL 无运行时方法, 直接调 SPL)
 inline void set_485_baudrate(uint32_t baudrate)
 {

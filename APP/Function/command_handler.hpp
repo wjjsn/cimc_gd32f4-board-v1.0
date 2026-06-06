@@ -222,11 +222,17 @@ class CommandHandler {
 	bool &is_sampling_;
 	bool &sleeping_;
 
+	// ——— 告警分批发送状态机 ———
+	bool alarm_send_active_ = false;
+	int alarm_send_index_ = 0;
+	uint32_t alarm_send_next_ms_ = 0;
+
 	// ——— 参数持久化 ———
 	void params_save()
 	{
 		params_.crc32 = params_crc32_calc(reinterpret_cast<const uint8_t *>(&params_), sizeof(DeviceParams) - 4);
 		flash_param_save(params_);
+		alarms_.save_to_flash();
 	}
 
 	// ——— 帧发送 ———
@@ -491,14 +497,44 @@ class CommandHandler {
 	void cmd_get_alarms(const ProtocolFrame &f) {
 		(void)f;
 		if (alarms_.record_count_ == 0) { send_with_485("empty\r\n"); return; }
-		char buf[128];
-		for (int i = 0; i < alarms_.record_count_; ++i) {
-			if (alarms_.records_[i].valid) {
-				AlarmManager::format_record(alarms_.records_[i], buf, sizeof(buf));
-				send_with_485(buf);
-			}
-		}
+		// 启动分批发送状态机: 每条记录独立发送, 间隔由 alarm_send_tick 控制
+		alarm_send_index_ = 0;
+		alarm_send_active_ = true;
+		alarm_send_next_ms_ = 0;
+		// 不在这里发送, 由下一次 alarm_send_tick 驱动第一条
 	}
 
-	void cmd_clear_alarms(const ProtocolFrame &f) { alarms_.clear(); send_ok(frame_devid(f), 0x0603); }
+	/// 告警分批发送驱动 (由调度器周期性调用, 传入当前 systick)
+	public:
+	void alarm_send_tick(uint32_t systick_ms)
+	{
+		if (!alarm_send_active_) return;
+		if (systick_ms < alarm_send_next_ms_) return;
+
+		// 跳过无效记录
+		while (alarm_send_index_ < alarms_.record_count_ &&
+		       !alarms_.records_[alarm_send_index_].valid) {
+			++alarm_send_index_;
+		}
+
+		if (alarm_send_index_ >= alarms_.record_count_) {
+			alarm_send_active_ = false;
+			return;
+		}
+
+		char buf[80];
+		AlarmManager::format_record(
+			alarms_.records_[alarm_send_index_], buf, sizeof(buf));
+		send_with_485(buf);
+
+		++alarm_send_index_;
+		// 下一条间隔 50ms, 给接收端留出处理时间
+		alarm_send_next_ms_ = systick_ms + 50;
+	}
+
+	void cmd_clear_alarms(const ProtocolFrame &f) {
+		alarms_.clear();
+		alarms_.save_to_flash();
+		send_ok(frame_devid(f), 0x0603);
+	}
 };
