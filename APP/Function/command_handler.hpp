@@ -157,7 +157,7 @@ class CommandHandler {
 		// 非广播且设备 ID 不匹配 — 静默丢弃 (协议规约 4.5.7(2))
 		if (devid != 0xFFFF && devid != params_.device_id) return;
 
-		// 自动上报期间: 只放行 0x0303(停止上报) 和 0x0111(查询ID, 评测项H-02要求), 其余静默丢弃
+		// 自动上报期间: 只放行 0x0303(停止上报) , 其余静默丢弃
 		if (auto_report_active_ && ftype == 0x01 && !(cmd == 0x0303)) return;
 
 		// 仅处理命令下发帧(0x01)和心跳/广播帧(0x05)
