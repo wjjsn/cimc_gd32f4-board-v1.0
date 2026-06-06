@@ -48,6 +48,9 @@ using Scheduler = StaticTimerManager<
 	// 500ms: OLED 刷新
 	TaskConfig{ 500, [] { g_device.oled_update(); } },
 
+	// 1000ms: 系统状态指示灯闪烁
+	TaskConfig{ 1000, [] { system_status_led::toggle(); } },
+
 	// 1000ms: 心跳
 	TaskConfig{ 1000, [] { g_device.try_heartbeat(systick_tick_ms); } }>;
 

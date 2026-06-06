@@ -8,7 +8,7 @@ using system_status_led = HAL::gd32f4::GPIO<
 	GPIO_PUPD_PULLDOWN,
 	HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_2MHZ, SET> >;
 using work_status_led = HAL::gd32f4::GPIO<
-	HAL::gd32f4::registers::GPIOE_ADDR, GPIO_PIN_3, GPIO_MODE_OUTPUT,
+	HAL::gd32f4::registers::GPIOE_ADDR, GPIO_PIN_4, GPIO_MODE_OUTPUT,
 	GPIO_PUPD_PULLDOWN,
 	HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_2MHZ, SET> >;
 

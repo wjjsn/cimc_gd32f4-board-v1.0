@@ -360,6 +360,7 @@ class CommandHandler {
 	void cmd_start_auto(const ProtocolFrame &f) {
 		auto_report_active_ = true; auto_report_next_ = 0;
 		oled_status_ = OLEDStatus::AUTO_SAMPLE; is_sampling_ = true;
+		work_status_led::set();
 		uint32_t utc = rtc_to_utc();
 		float ch0 = read_ch0() * params_.ch0_ratio, ch1 = read_ch1() * params_.ch1_ratio;
 		uint8_t buf[12];
@@ -370,6 +371,7 @@ class CommandHandler {
 
 	void cmd_stop_auto(const ProtocolFrame &f) {
 		auto_report_active_ = false; oled_status_ = OLEDStatus::IDLE; is_sampling_ = false;
+		work_status_led::clear();
 		send_ok(frame_devid(f), 0x0303);
 	}
 

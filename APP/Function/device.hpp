@@ -144,7 +144,11 @@ template <typename RingBuffer> class Device {
 
 	void auto_report_tick(uint32_t systick_ms)
 	{
-		if (!auto_report_active_) return;
+		if (!auto_report_active_) {
+			work_status_led::clear();
+			return;
+		}
+		work_status_led::set();
 
 		if (systick_ms >= auto_report_next_) {
 			auto_report_next_ = systick_ms + auto_report_interval_ms_;
@@ -170,7 +174,7 @@ template <typename RingBuffer> class Device {
 		last = oled_status_;
 
 		g_screen.chear();
-		g_screen.printf(0, 0, "%s", "CIMC2026");
+		g_screen.printf(0, 0, "%s", "ID:2026523446");
 		const char *line2;
 		switch (oled_status_) {
 		case OLEDStatus::BOOTLOADER: line2 = "Bootloader";  break;
