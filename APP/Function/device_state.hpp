@@ -28,6 +28,10 @@ namespace DeviceState
 
 	inline OLEDStatus g_oled_status = OLEDStatus::IDLE;
 
+	// 告警触发标志 (true 表示当前处于告警状态，用于上升沿触发)
+	inline volatile bool g_ch0_alarm_active = false;
+	inline volatile bool g_ch1_alarm_active = false;
+	
 	// ===================== LED =====================
 	// 系统状态灯: 进入 APP 后 1s 闪烁
 	// 采集工作灯: 自动采集时常亮, 否则熄灭
@@ -39,6 +43,7 @@ namespace DeviceState
 	inline bool g_auto_report_active		  = false;
 	inline uint32_t g_auto_report_next		  = 0; // 下次上报的 tick
 	inline uint32_t g_auto_report_interval_ms = 1000;
+
 
 	/// 刷新 OLED 双行显示
 	inline void oled_update()

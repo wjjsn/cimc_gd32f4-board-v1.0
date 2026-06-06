@@ -97,10 +97,13 @@ namespace CmdDispatch
 	{
 		int16_t raw = g_adc.read_raw();
 		// GD30AD3340: PGA=±2.048V, 16-bit signed, 量程 ±2048mV
+		if(raw<0){
+			raw=0;
+		}
 		// 转换为电压, 再按 PT100 分压计算温度 (简化: 直接返回 raw 转电压)
-		float voltage = raw * 2.048f / 32768.0f;
+		float voltage = ((float)raw / 32768.0f)* 2.048f;
 		// PT100 温度近似: 假设分压电路 0°C=0V, 每°C ≈ 0.008V (简化)
-		return voltage / 0.008f; // 简单线性
+		return voltage * voltage * -6.91f + 268.66f * voltage - 281.28f; // 二次线性；检测+-4度内
 	}
 
 	/// RTC 时间 → UTC 时间戳 (简化 mktime)

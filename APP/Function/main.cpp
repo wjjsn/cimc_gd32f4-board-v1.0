@@ -79,36 +79,49 @@ using Scheduler = StaticTimerManager<
 	// 10ms: 告警扫描 (始终运行, 不依赖自动上报)
 	TaskConfig{10, []
 			   {
-				   float ch0	= CmdDispatch::read_ch0() * Params::g_params.ch0_ratio;
-				   float ch1	= CmdDispatch::read_ch1() * Params::g_params.ch1_ratio;
-				   float thr0	= Params::g_params.ch0_threshold;
-				   float thr1	= Params::g_params.ch1_threshold;
-				   uint32_t utc = CmdDispatch::rtc_to_utc();
+				   float ch0 = CmdDispatch::read_ch0() * Params::g_params.ch0_ratio;
+					float ch1 = CmdDispatch::read_ch1() * Params::g_params.ch1_ratio;
+					float thr0 = Params::g_params.ch0_threshold;
+					float thr1 = Params::g_params.ch1_threshold;
+					uint32_t utc = CmdDispatch::rtc_to_utc();
 
-				   if (!(ch0 <= thr0))
-				   {
-					   Alarm::add(utc, 0, thr0, ch0);
-					   Alarm::save_to_flash();
-					   if (Alarm::g_active)
-					   {
-						   char buf[128];
-						   Alarm::format_record(Alarm::g_records[0], buf, sizeof(buf));
-						   send_with_485(buf);
-					   }
-				   }
-				   if (!(ch1 <= thr1))
-				   {
-					   Alarm::add(utc, 1, thr1, ch1);
-					   Alarm::save_to_flash();
-					   if (Alarm::g_active)
-					   {
-						   char buf[128];
-						   Alarm::format_record(Alarm::g_records[0], buf, sizeof(buf));
-						   send_with_485(buf);
-					   }
-				   }
-			   }},
+					// CH0 告警处理：仅当从正常变为超限时触发一次
+					bool ch0_over = (ch0 > thr0);
+					if (ch0_over && !DeviceState::g_ch0_alarm_active) {
+						Alarm::add(utc, 0, thr0, ch0);
+						Alarm::save_to_flash();
+						if (Alarm::g_active) {
+							char buf[128];
+							// 获取最新添加的告警记录（假设 Alarm::add 追加到末尾）
+							int last_idx = Alarm::g_record_count - 1;
+							if (last_idx >= 0) {
+								Alarm::format_record(Alarm::g_records[last_idx], buf, sizeof(buf));
+								send_with_485(buf);
+							}
+						}
+						DeviceState::g_ch0_alarm_active = true;
+					} else if (!ch0_over && DeviceState::g_ch0_alarm_active) {
+						DeviceState::g_ch0_alarm_active = false; // 恢复正常，清除标志
+					}
 
+					// CH1 告警处理
+					bool ch1_over = (ch1 > thr1);
+					if (ch1_over && !DeviceState::g_ch1_alarm_active) {
+						Alarm::add(utc, 1, thr1, ch1);
+						Alarm::save_to_flash();
+						if (Alarm::g_active) {
+							char buf[128];
+							int last_idx = Alarm::g_record_count - 1;
+							if (last_idx >= 0) {
+								Alarm::format_record(Alarm::g_records[last_idx], buf, sizeof(buf));
+								send_with_485(buf);
+							}
+						}
+						DeviceState::g_ch1_alarm_active = true;
+					} else if (!ch1_over && DeviceState::g_ch1_alarm_active) {
+						DeviceState::g_ch1_alarm_active = false;
+					}
+				}},
 	// 100ms: 自动上报 + 间隔判断
 	TaskConfig{100, []
 			   {
