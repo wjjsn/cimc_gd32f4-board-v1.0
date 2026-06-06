@@ -170,7 +170,7 @@ static void run_upgrade_mode()
 	for (int sec = UPGRADE_TIMEOUT_S; sec >= 1; --sec) {
 		char msg[64];
 		snprintf(msg, sizeof(msg),
-			 "wait for start Application(%ds)……\r\n", sec);
+			 "wait for start Application(%ds)......\n", sec);
 		send_with_485(msg);
 		uint32_t dl = systick_tick_ms + 1000;
 		while (systick_tick_ms < dl) {
