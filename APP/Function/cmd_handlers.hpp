@@ -10,7 +10,7 @@
 #include "hardware.hpp"
 #include <cstdio>
 #include <cmath>
-#include <ctime>
+
 
 // GD30AD3340 全局实例 (定义在 main.cpp)
 extern ADC g_adc;
@@ -105,34 +105,132 @@ namespace CmdDispatch
 		// PT100 温度近似: 假设分压电路 0°C=0V, 每°C ≈ 0.008V (简化)
 		return voltage * voltage * -6.91f + 268.66f * voltage - 281.28f; // 二次线性；检测+-4度内
 	}
+        inline uint8_t bcd_to_dec(uint8_t val) {
+          return ((val >> 4) * 10) + (val & 0x0F);
+        }
+        /// RTC 时间 → UTC 时间戳 (简化 mktime)
+        inline uint32_t rtc_to_utc() {
+          // 获取 RTC 硬件时间 (BCD 格式)
+          auto t = RTC::get_time();
 
-	/// RTC 时间 → UTC 时间戳 (简化 mktime)
-	inline uint32_t rtc_to_utc()
-	{
-		auto t			  = RTC::get_time();
-		struct tm tm_info = {};
-		tm_info.tm_year	  = t.year + 100; // RTC year 是 00-99, tm_year = year-1900
-		tm_info.tm_mon	  = t.month - 1;
-		tm_info.tm_mday	  = t.date;
-		tm_info.tm_hour	  = t.hour;
-		tm_info.tm_min	  = t.minute;
-		tm_info.tm_sec	  = t.second;
-		return static_cast<uint32_t>(mktime(&tm_info));
-	}
+          // 1. 将 BCD 码转换为普通十进制
+          uint16_t year = bcd_to_dec(t.year) + 2000; // 假设 26 转换为 2026
+          uint8_t month = bcd_to_dec(t.month);
+          uint8_t day = bcd_to_dec(t.date);
+          uint8_t hour = bcd_to_dec(t.hour);
+          uint8_t min = bcd_to_dec(t.minute);
+          uint8_t sec = bcd_to_dec(t.second);
 
-	/// UTC 时间戳 → 设置 RTC
-	inline void utc_to_rtc(uint32_t utc)
-	{
-		time_t t		   = utc;
-		struct tm *tm_info = gmtime(&t);
-		RTC::set_time(tm_info->tm_year - 100, tm_info->tm_mon + 1, tm_info->tm_mday,
-					  tm_info->tm_wday, tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
-		g_utc_timestamp = utc;
-	}
+          // 2. 计算从 1970 年到当前年份前一年的总天数
+          uint32_t total_days = 0;
+          for (uint16_t y = 1970; y < year; y++) {
+            bool is_leap = (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0));
+            total_days += is_leap ? 366 : 365;
+          }
 
-	// ==================== 命令处理函数 ====================
+          // 3. 累加今年过去月份的天数
+          bool current_is_leap =
+              (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+          const uint8_t days_in_month[] = {
+              31, (uint8_t)(current_is_leap ? 29 : 28),
+              31, 30,
+              31, 30,
+              31, 31,
+              30, 31,
+              30, 31};
 
-	// 0x0101 — 设备重启
+          // month 的范围是 1 ~ 12，累加到 month - 1 即可
+          for (int m = 0; m < month - 1; m++) {
+            total_days += days_in_month[m];
+          }
+
+          // 4. 累加当月的当前天数 (注意：day 是从 1 开始的，算过去的天数要减 1)
+          total_days += (day - 1);
+
+          // 5. 将天数转换为秒，并累加当天的时、分、秒
+          uint32_t utc_timestamp = (total_days * 86400) +
+                                   ((uint32_t)hour * 3600) +
+                                   ((uint32_t)min * 60) + sec;
+
+          return utc_timestamp;
+        }
+
+        inline uint8_t dec_to_bcd(uint8_t val) {
+          return ((val / 10) << 4) | (val % 10);
+        }
+        inline auto utc_to_rtc_bcd(uint32_t utc) {
+          // 1. 计算星期几 (1970年1月1日是星期四)
+          // 星期通常不需要特殊 BCD 转换（0-6），但为了统一也可以过一遍
+          uint8_t wday = (utc / 86400 + 4) % 7;
+
+          // 2. 计算时、分、秒
+          uint32_t time_of_day = utc % 86400;
+          uint8_t hour = time_of_day / 3600;
+          uint8_t minute = (time_of_day % 3600) / 60;
+          uint8_t second = time_of_day % 60;
+
+          // 3. 计算天数与年份
+          uint32_t days = utc / 86400;
+          uint16_t year = 1970;
+
+          while (true) {
+            bool is_leap =
+                (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+            uint16_t days_in_year = is_leap ? 366 : 365;
+            if (days >= days_in_year) {
+              days -= days_in_year;
+              year++;
+            } else {
+              break;
+            }
+          }
+
+          // 4. 计算月份与日期
+          bool is_leap =
+              (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
+          const uint8_t days_in_month[] = {31, (uint8_t)(is_leap ? 29 : 28),
+                                           31, 30,
+                                           31, 30,
+                                           31, 31,
+                                           30, 31,
+                                           30, 31};
+
+          uint8_t month = 0;
+          while (days >= days_in_month[month]) {
+            days -= days_in_month[month];
+            month++;
+          }
+
+          uint8_t month_dec = month + 1; // 1-12 月
+          uint8_t date_dec = days + 1;   // 1-31 日
+
+          // RTC 硬件通常只取年份的后两位（如 2026 年取 26）
+          uint8_t year_short = year % 100;
+
+          // 5. 构造并返回 BCD 格式的 RTC_Time
+          HAL::gd32f4::RTC_Time rtc;
+          rtc.year = dec_to_bcd(year_short);
+          rtc.month = dec_to_bcd(month_dec);
+          rtc.date = dec_to_bcd(date_dec);
+          rtc.week =
+              dec_to_bcd(wday); // 注：部分 RTC 的星期范围是
+                                // 1-7（1是周一或周日），如需调整请在此处修改
+          rtc.hour = dec_to_bcd(hour);
+          rtc.minute = dec_to_bcd(minute);
+          rtc.second = dec_to_bcd(second);
+
+          return rtc;
+        }
+        /// UTC 时间戳 → 设置 RTC
+        inline void set_rtc_time(uint32_t utc) {
+          auto time = utc_to_rtc_bcd(utc);
+          RTC::set_time(time.year, time.month, time.date, time.week, time.hour,
+                        time.minute, time.second);
+        }
+
+        // ==================== 命令处理函数 ====================
+
+        // 0x0101 — 设备重启
 	inline void cmd_0101_reboot(const Frame &f)
 	{
 		uint16_t devid = frame_devid(f);
@@ -162,8 +260,8 @@ namespace CmdDispatch
 						   (static_cast<uint32_t>(c[1]) << 16) |
 						   (static_cast<uint32_t>(c[2]) << 8) |
 						   c[3];
-			utc_to_rtc(utc);
-			send_ok(devid, 0x0105);
+                        set_rtc_time(utc);
+                        send_ok(devid, 0x0105);
 		}
 		else
 			send_error(devid);
