@@ -28,7 +28,6 @@ lds = meson.current_source_dir()/'app_flash.ld'
 # ===================== App 可执行文件 =====================
 executable('APP.elf', files(
     'Function'/'main.cpp',
-    'Protocol'/'protocol.cpp',
 ),
     dependencies: dependencies,
     link_args: [

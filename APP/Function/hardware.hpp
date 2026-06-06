@@ -63,7 +63,7 @@ using I2C0_BUS = HAL::gd32f4::I2C_bus<I2C0_SDA, I2C0_SCL,
 // ========== GD30AD3340 设备 ==========
 // 7-bit 地址 0x48 → 8-bit 写入地址 0x90 (ADDR 接 GND)
 using ADC_I2C = HAL::gd32f4::I2C_device_addr<I2C0_BUS, 0x90>;
-using ADC = GD30AD3340<ADC_I2C>;
+using gd30ad3340_on_i2c0 = GD30AD3340<ADC_I2C>;
 
 #define OLED_ADDRESS 0x78
 using OLED_I2C = HAL::gd32f4::I2C_device_addr<I2C0_BUS, OLED_ADDRESS>;

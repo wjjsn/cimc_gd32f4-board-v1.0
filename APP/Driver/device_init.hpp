@@ -6,7 +6,7 @@
 #include "dac_driver.hpp"
 
 // 前向声明 (实例定义在 cmd_handlers.hpp / device_state.hpp)
-extern ADC g_adc;
+extern gd30ad3340_on_i2c0 g_adc;
 extern Screen g_screen;
 
 /// 初始化所有外设, 注意: GPIO 引脚由模板构造时自动初始化
@@ -22,8 +22,8 @@ inline void device_init_all()
 	I2C0_BUS::init();
 
 	g_screen.init();
-	g_adc.init(ADC::MUX_AIN0_GND, ADC::PGA_2048, ADC::MODE_CONTINUOUS,
-		   ADC::DR_100, ADC::COMP_QUE_DIS);
+	g_adc.init(gd30ad3340_on_i2c0::MUX_AIN0_GND, gd30ad3340_on_i2c0::PGA_2048,
+		   gd30ad3340_on_i2c0::MODE_CONTINUOUS, gd30ad3340_on_i2c0::DR_100, gd30ad3340_on_i2c0::COMP_QUE_DIS);
 
 	// ADC0 (CH0 电位器: PC0=CH10, CH1 DAC回读: PC1=CH11)
 	ADC0_GPIO::init();
