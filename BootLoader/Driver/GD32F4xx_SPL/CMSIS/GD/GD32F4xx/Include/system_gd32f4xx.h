@@ -50,9 +50,9 @@ extern uint32_t SystemCoreClock;
 
 /* function declarations */
 /* initialize the system and update the SystemCoreClock variable */
-extern void SystemInit (void);
+extern void SystemInit(void);
 /* update the SystemCoreClock with current core clock retrieved from cpu registers */
-extern void SystemCoreClockUpdate (void);
+extern void SystemCoreClockUpdate(void);
 #ifdef __FIRMWARE_VERSION_DEFINE
 /* get firmware version */
 extern uint32_t gd32f4xx_firmware_version_get(void);

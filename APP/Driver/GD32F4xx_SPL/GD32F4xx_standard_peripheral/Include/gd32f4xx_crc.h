@@ -38,23 +38,22 @@ OF SUCH DAMAGE.
 #include "gd32f4xx.h"
 
 /* CRC definitions */
-#define CRC                            CRC_BASE                        /*!< CRC base address */
+#define CRC CRC_BASE /*!< CRC base address */
 
 /* registers definitions */
-#define CRC_DATA                       REG32(CRC + 0x00000000U)        /*!< CRC data register */
-#define CRC_FDATA                      REG32(CRC + 0x00000004U)        /*!< CRC free data register */
-#define CRC_CTL                        REG32(CRC + 0x00000008U)        /*!< CRC control register */
+#define CRC_DATA REG32(CRC + 0x00000000U) /*!< CRC data register */
+#define CRC_FDATA REG32(CRC + 0x00000004U) /*!< CRC free data register */
+#define CRC_CTL REG32(CRC + 0x00000008U) /*!< CRC control register */
 
 /* bits definitions */
 /* CRC_DATA */
-#define CRC_DATA_DATA                  BITS(0,31)                      /*!< CRC calculation result bits */
+#define CRC_DATA_DATA BITS(0, 31) /*!< CRC calculation result bits */
 
 /* CRC_FDATA */
-#define CRC_FDATA_FDATA                BITS(0,7)                       /*!< CRC free data bits */
+#define CRC_FDATA_FDATA BITS(0, 7) /*!< CRC free data bits */
 
 /* CRC_CTL */
-#define CRC_CTL_RST                    BIT(0)                          /*!< CRC reset CRC_DATA register bit */
-
+#define CRC_CTL_RST BIT(0) /*!< CRC reset CRC_DATA register bit */
 
 /* function declarations */
 /* deinit CRC calculation unit */

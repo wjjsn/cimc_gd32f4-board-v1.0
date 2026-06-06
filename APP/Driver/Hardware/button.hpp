@@ -9,22 +9,22 @@ using CallbackFunc = void (*)();
  * - HoldTask: 长按回调函数
  * - ClickTasks: 连击回调函数包（依次为 单击、双击、三击...）
  */
-template <typename GPIO, bool TrigState, CallbackFunc HoldTask, CallbackFunc... ClickTasks>
-struct StaticKey
-{
-private:
+template <typename GPIO, bool TrigState, CallbackFunc HoldTask,
+	  CallbackFunc... ClickTasks>
+struct StaticKey {
+    private:
 	// 编译期自动计算注册的最高连击次数
 	static constexpr std::size_t MAX_CLICKS = sizeof...(ClickTasks);
 
 	// 静态状态变量
-	inline static bool stateRealTime		  = !TrigState;
-	inline static bool stateLastTime		  = !TrigState;
+	inline static bool stateRealTime = !TrigState;
+	inline static bool stateLastTime = !TrigState;
 	inline static uint32_t clickCountRealTime = 0;
 	inline static uint32_t clickCountLastTime = 0;
-	inline static uint32_t holdCount		  = 0;
-	inline static bool holding			  = false;
+	inline static uint32_t holdCount = 0;
+	inline static bool holding = false;
 
-public:
+    public:
 	// 1. 初始化接口
 	static void init()
 	{
@@ -36,12 +36,10 @@ public:
 	// 2. 检测长按状态
 	static void detect_key_hold()
 	{
-		if (holdCount >= 60)
-		{
+		if (holdCount >= 60) {
 			holdCount = 60;
 			holding = true;
-			if (HoldTask)
-			{
+			if (HoldTask) {
 				HoldTask();
 			}
 		}
@@ -54,20 +52,19 @@ public:
 		stateRealTime = GPIO::read();
 
 		// 检测释放边缘（从触发电平变为非触发电平，计为一次点击完成）
-		if (stateRealTime == (!TrigState) && stateLastTime == TrigState)
-		{
+		if (stateRealTime == (!TrigState) &&
+		    stateLastTime == TrigState) {
 			clickCountRealTime++;
 		}
 
 		// 持续处于触发状态，累加长按计数
-		if (stateRealTime == TrigState && stateLastTime == TrigState)
-		{
+		if (stateRealTime == TrigState && stateLastTime == TrigState) {
 			holdCount++;
 		}
 
 		// 持续处于释放状态，清空长按计数
-		if (stateRealTime == (!TrigState) && stateLastTime == (!TrigState))
-		{
+		if (stateRealTime == (!TrigState) &&
+		    stateLastTime == (!TrigState)) {
 			holdCount = 0;
 		}
 	}
@@ -79,29 +76,27 @@ public:
 		detect_key_hold();
 
 		// 状态还在改变，或者没有点击，直接返回（消抖或等待连续点击结束）
-		if (clickCountRealTime != clickCountLastTime || clickCountRealTime == 0)
-		{
+		if (clickCountRealTime != clickCountLastTime ||
+		    clickCountRealTime == 0) {
 			clickCountLastTime = clickCountRealTime;
 			return;
 		}
 
 		// 计数稳定且不为 0，说明连击结束，开始处理
-		if (clickCountRealTime == clickCountLastTime && clickCountRealTime != 0)
-		{
+		if (clickCountRealTime == clickCountLastTime &&
+		    clickCountRealTime != 0) {
 			std::size_t clickIndex = clickCountRealTime - 1;
 
 			// 将编译期参数包直接初始化为局部静态只读数组
-			static constexpr CallbackFunc tasks[] = {ClickTasks...};
+			static constexpr CallbackFunc tasks[] = {
+				ClickTasks...
+			};
 
 			// O(1) 数组直达，安全检查边界后直接调用
-			if (clickIndex < MAX_CLICKS)
-			{
-				if (clickIndex == 0 && holding)
-				{
+			if (clickIndex < MAX_CLICKS) {
+				if (clickIndex == 0 && holding) {
 					holding = false;
-				}
-				else if (tasks[clickIndex])
-				{
+				} else if (tasks[clickIndex]) {
 					tasks[clickIndex]();
 				}
 			}

@@ -51,7 +51,6 @@ extern uint32_t chry_ringbuffer_linear_read_done(chry_ringbuffer_t *rb, uint32_t
 
 template <chry_ringbuffer_t *rb_, uint32_t size_>
 struct Cherry_RingBuffer {
-
     static std::array<uint8_t, size_> pool_;
 
     static_assert((size_ & (size_ - 1)) == 0, "the size of the memory pool must be a power of 2 !!!");

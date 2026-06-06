@@ -21,11 +21,8 @@ inline void device_init_all()
 	I2C0_BUS::init();
 
 	g_screen.init();
-	g_adc.init(ADC::MUX_AIN0_GND,
-			   ADC::PGA_2048,
-			   ADC::MODE_CONTINUOUS,
-			   ADC::DR_100,
-			   ADC::COMP_QUE_DIS);
+	g_adc.init(ADC::MUX_AIN0_GND, ADC::PGA_2048, ADC::MODE_CONTINUOUS,
+		   ADC::DR_100, ADC::COMP_QUE_DIS);
 
 	// ADC0 (CH0 电位器: PC0=CH10, CH1 DAC回读: PC1=CH11)
 	ADC0_GPIO::init();

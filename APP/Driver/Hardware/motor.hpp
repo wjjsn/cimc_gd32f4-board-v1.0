@@ -1,9 +1,7 @@
 #pragma once
 #ifdef __cplusplus
 
-template <typename PWM>
-struct motor
-{
+template <typename PWM> struct motor {
 	static void init()
 	{
 		PWM::init();

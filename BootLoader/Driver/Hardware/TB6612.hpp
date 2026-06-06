@@ -1,9 +1,7 @@
 #pragma once
 #ifdef __cplusplus
 
-template <typename motor, typename IN1, typename IN2>
-struct TB6612
-{
+template <typename motor, typename IN1, typename IN2> struct TB6612 {
 	static void init()
 	{
 		motor::init();

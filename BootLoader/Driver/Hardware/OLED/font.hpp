@@ -2,9 +2,8 @@
 
 #include <cstdint>
 
-typedef struct
-{
-	char Index[5];	  // 汉字索引，空间为5字节
+typedef struct {
+	char Index[5]; // 汉字索引，空间为5字节
 	uint8_t Data[32]; // 字模数据
 } ChineseCell_t;
 

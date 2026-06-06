@@ -38,40 +38,40 @@ OF SUCH DAMAGE.
 #include "gd32f4xx.h"
 
 /* TRNG definitions */
-#define TRNG                        TRNG_BASE
+#define TRNG TRNG_BASE
 
 /* registers definitions */
-#define TRNG_CTL                    REG32(TRNG + 0x00000000U)        /*!< control register */
-#define TRNG_STAT                   REG32(TRNG + 0x00000004U)        /*!< status register */
-#define TRNG_DATA                   REG32(TRNG + 0x00000008U)        /*!< data register */
+#define TRNG_CTL REG32(TRNG + 0x00000000U) /*!< control register */
+#define TRNG_STAT REG32(TRNG + 0x00000004U) /*!< status register */
+#define TRNG_DATA REG32(TRNG + 0x00000008U) /*!< data register */
 
 /* bits definitions */
 /* TRNG_CTL */
-#define TRNG_CTL_TRNGEN             BIT(2)                     /*!< TRNG enable bit */
-#define TRNG_CTL_TRNGIE             BIT(3)                     /*!< interrupt enable bit */
+#define TRNG_CTL_TRNGEN BIT(2) /*!< TRNG enable bit */
+#define TRNG_CTL_TRNGIE BIT(3) /*!< interrupt enable bit */
 
 /* TRNG_STAT */
-#define TRNG_STAT_DRDY              BIT(0)                     /*!< random data ready status bit */
-#define TRNG_STAT_CECS              BIT(1)                     /*!< clock error current status */
-#define TRNG_STAT_SECS              BIT(2)                     /*!< seed error current status */
-#define TRNG_STAT_CEIF              BIT(5)                     /*!< clock error interrupt flag */
-#define TRNG_STAT_SEIF              BIT(6)                     /*!< seed error interrupt flag */
+#define TRNG_STAT_DRDY BIT(0) /*!< random data ready status bit */
+#define TRNG_STAT_CECS BIT(1) /*!< clock error current status */
+#define TRNG_STAT_SECS BIT(2) /*!< seed error current status */
+#define TRNG_STAT_CEIF BIT(5) /*!< clock error interrupt flag */
+#define TRNG_STAT_SEIF BIT(6) /*!< seed error interrupt flag */
 
 /* TRNG_DATA */
-#define TRNG_DATA_TRNGDATA          BITS(0,31)                 /*!< 32-Bit Random data */
+#define TRNG_DATA_TRNGDATA BITS(0, 31) /*!< 32-Bit Random data */
 
 /* constants definitions */
 /* TRNG status flag */
-typedef enum { 
-    TRNG_FLAG_DRDY = TRNG_STAT_DRDY,                           /*!< random Data ready status */
-    TRNG_FLAG_CECS = TRNG_STAT_CECS,                           /*!< clock error current status */
-    TRNG_FLAG_SECS = TRNG_STAT_SECS                            /*!< seed error current status */
+typedef enum {
+	TRNG_FLAG_DRDY = TRNG_STAT_DRDY, /*!< random Data ready status */
+	TRNG_FLAG_CECS = TRNG_STAT_CECS, /*!< clock error current status */
+	TRNG_FLAG_SECS = TRNG_STAT_SECS /*!< seed error current status */
 } trng_flag_enum;
 
 /* TRNG inerrupt flag */
 typedef enum {
-    TRNG_INT_FLAG_CEIF = TRNG_STAT_CEIF,                       /*!< clock error interrupt flag */
-    TRNG_INT_FLAG_SEIF = TRNG_STAT_SEIF                        /*!< seed error interrupt flag */
+	TRNG_INT_FLAG_CEIF = TRNG_STAT_CEIF, /*!< clock error interrupt flag */
+	TRNG_INT_FLAG_SEIF = TRNG_STAT_SEIF /*!< seed error interrupt flag */
 } trng_int_flag_enum;
 
 /* function declarations */
