@@ -1,6 +1,7 @@
 #pragma once
 // 设备核心对象 — 状态容器, 调度器任务入口, 参数持久化
 
+#include "OLED/ssd1306/0.91.hpp"
 #include "hardware.hpp"
 #include "params.hpp"
 #include "alarm_manager.hpp"
@@ -11,8 +12,9 @@
 
 extern Screen g_screen;
 
-template <typename RingBuffer>
-class Device {
+constexpr uint32_t DEFAULT_BAUDRATE = 19200;
+
+template <typename RingBuffer> class Device {
     public:
 	DeviceParams params_{};
 	AlarmManager alarms_;
@@ -51,6 +53,24 @@ class Device {
 			params_, alarms_, oled_status_,
 			auto_report_active_, auto_report_next_,
 			auto_report_interval_ms_, is_sampling_, sleeping_);
+
+		// if ( //Power reset generated
+		// 	RESET != rcu_flag_get(RCU_FLAG_PORRST) ||
+		// 	//External PIN reset generated
+		// 	(RESET != rcu_flag_get(RCU_FLAG_EPRST) &&
+		// 	 RESET == rcu_flag_get(RCU_FLAG_PORRST))) {
+		// 	usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
+		// 			   DEFAULT_BAUDRATE);
+		// 	usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+		// }
+		// //Software reset generated
+		// else if (RESET != rcu_flag_get(RCU_FLAG_SWRST)) {
+			usart_baudrate_set(
+				HAL::gd32f4::registers::USART1_ADDR,
+				baudrate_code_to_hz(params_.baudrate_code));
+			usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+		// }
+		// rcu_all_reset_flag_clear();
 
 		SEGGER_RTT_WriteString(0, "=== CIMC APP v2.0.1.0 ===\r\n");
 	}

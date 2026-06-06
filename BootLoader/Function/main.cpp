@@ -283,6 +283,22 @@ static void run_upgrade_mode()
 }
 
 // ===================== main =====================
+constexpr uint32_t DEFAULT_BAUDRATE = 19200;
+inline uint32_t baudrate_code_to_hz(uint8_t code)
+{
+	switch (code) {
+	case 0x11:
+		return 4800;
+	case 0x12:
+		return 9600;
+	case 0x13:
+		return 19200;
+	case 0x14:
+		return 115200;
+	default:
+		return 19200;
+	}
+}
 extern "C" {
 int main(void)
 {
@@ -291,6 +307,23 @@ int main(void)
 	USART1::enable_it(0, 0);
 	Params::load();
 	g_proto.init();
+	// if ( //Power reset generated
+	// 	RESET != rcu_flag_get(RCU_FLAG_PORRST) ||
+	// 	//External PIN reset generated
+	// 	(RESET != rcu_flag_get(RCU_FLAG_EPRST) &&
+	// 	 RESET == rcu_flag_get(RCU_FLAG_PORRST))) {
+	// 	usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
+	// 			   DEFAULT_BAUDRATE);
+	// 	usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+	// }
+	// //Software reset generated
+	// else if (RESET != rcu_flag_get(RCU_FLAG_SWRST)) {
+		usart_baudrate_set(
+			HAL::gd32f4::registers::USART1_ADDR,
+			baudrate_code_to_hz(Params::g_params.baudrate_code));
+		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+	// }
+	rcu_all_reset_flag_clear();
 
 	DeviceState::g_oled_status = DeviceState::OLEDStatus::BOOTLOADER;
 	DeviceState::oled_update();
