@@ -17,6 +17,9 @@
 #include "device_state.hpp"
 #include "cmd_handlers.hpp"
 
+
+#include "core_cm4.h"
+
 // ===================== 环形缓冲区 =====================
 chry_ringbuffer_t ctx_uart1_buffer;
 using uart1_buffer = Cherry_RingBuffer<&ctx_uart1_buffer, 128>;
@@ -181,17 +184,10 @@ extern "C"
 		// 使能串口中断接收
 		USART1::enable_it(0, 0);
 
-		if (SysTick_Config(SystemCoreClock / 1000U))
-		{
-			while (1) {
-				SEGGER_RTT_WriteString(0, "SysTick config failed!\r\n");
-			}
-		}
-		NVIC_SetPriority(SysTick_IRQn, 0x00U);
-		// 加载参数
-		Params::load();
+                // 加载参数
+                Params::load();
 
-		// 初始化协议解析器
+                // 初始化协议解析器
 		g_proto.init();
 
 		// 初始化告警
@@ -210,11 +206,17 @@ extern "C"
 
 		SEGGER_RTT_WriteString(0, "=== CIMC APP v2.0.1.0 ===\r\n");
 
-		while (1)
-		{
-			Scheduler::poll();
-		}
-	}
+                if (SysTick_Config(SystemCoreClock / 1000U)) {
+                  while (1) {
+                    SEGGER_RTT_WriteString(0, "SysTick config failed!\r\n");
+                    __asm volatile("BKPT #0");
+                  }
+                }
+                NVIC_SetPriority(SysTick_IRQn, 0x00U);
+                while (1) {
+                  Scheduler::poll();
+                }
+        }
 
 	void USART1_IRQHandler()
 	{
