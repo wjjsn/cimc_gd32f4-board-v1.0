@@ -45,4 +45,6 @@ inline void device_init_all()
 	// DAC
 	DAC0_GPIO::init();
 	dac_init();
+
+	__enable_irq();
 }
