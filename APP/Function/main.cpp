@@ -94,6 +94,15 @@ void SysTick_Handler()
 	systick_tick_ms = systick_tick_ms + 1;
 }
 
+// RTC 闹钟中断 — 清除标志位以使深度睡眠能被正常唤醒
+void RTC_Alarm_IRQHandler()
+{
+	if (RESET != rtc_flag_get(RTC_FLAG_ALRM0)) {
+		rtc_flag_clear(RTC_FLAG_ALRM0);
+		exti_flag_clear(EXTI_17);
+	}
+}
+
 void _exit(int)
 {
 	while (1)

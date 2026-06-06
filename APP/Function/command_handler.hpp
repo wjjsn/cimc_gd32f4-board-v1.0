@@ -12,7 +12,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ctime>
-
+extern "C" void SystemInit();
 // 外部全局外设 (定义在 main.cpp)
 extern gd30ad3340_on_i2c0 g_adc;
 
@@ -375,19 +375,71 @@ class CommandHandler {
 
 	void cmd_sleep(const ProtocolFrame &f) {
 		send_ok(frame_devid(f), 0x03AA);
+		// 等待发送完成
 		for (int i = 0; i < 100000; ++i) __asm__ volatile("nop");
+
+		// 1. 清除残留标志
 		rtc_alarm_disable(RTC_ALARM0);
+		rtc_flag_clear(RTC_FLAG_ALRM0);
+		exti_flag_clear(EXTI_17);
+
+		// 2. 配置 EXTI line 17 (先 deinit 再 init, 对齐参考工程)
+		exti_deinit();
+		exti_init(EXTI_17, EXTI_INTERRUPT, EXTI_TRIG_RISING);
+		rtc_flag_clear(RTC_FLAG_ALRM0);
+		exti_interrupt_flag_clear(EXTI_17);
+		exti_interrupt_enable(EXTI_17);
+
+		// 3. 使能 NVIC RTC 闹钟中断
+		nvic_irq_enable(RTC_Alarm_IRQn, 2U, 1U);
+
+		// 4. 配置 RTC 闹钟 (10 秒后; second 是 BCD 格式, 必须用 bcd_to_dec/dec_to_bcd)
 		rtc_alarm_struct alarm = {};
 		auto t = RTC::get_time();
 		alarm.alarm_mask = RTC_ALARM_DATE_MASK | RTC_ALARM_HOUR_MASK | RTC_ALARM_MINUTE_MASK;
-		alarm.alarm_second = (t.second + 10) % 60;
+		alarm.weekday_or_date = RTC_ALARM_DATE_SELECTED;
+		alarm.alarm_day = 0x31;
+		alarm.alarm_hour = 0x00;
+		alarm.alarm_minute = 0x00;
+		alarm.alarm_second = dec_to_bcd((bcd_to_dec(t.second) + 10) % 60);
 		alarm.am_pm = RTC_AM;
 		rtc_alarm_config(RTC_ALARM0, &alarm);
-		rtc_alarm_enable(RTC_ALARM0);
 		rtc_interrupt_enable(RTC_INT_ALARM0);
+		rtc_alarm_enable(RTC_ALARM0);
+
 		sleeping_ = true;
-		pmu_to_deepsleepmode(PMU_LDO_NORMAL, PMU_LOWDRIVER_DISABLE, WFI_CMD);
+
+		// 5. HCLK 降频序列 (防 Vcore 波动导致自锁死, GD32F4xx 强烈建议)
+		//    参考: Deepsleep_wakeup_RTC/main.c 第 85-96 行
+		{
+			auto soft_delay = [](uint32_t time) {
+				__IO uint32_t ii;
+				for (ii = 0; ii < time * 10; ii = ii + 1) {}
+			};
+			rcu_ahb_clock_config(RCU_AHB_CKSYS_DIV2);
+			soft_delay(0x50);
+			rcu_ahb_clock_config(RCU_AHB_CKSYS_DIV4);
+			soft_delay(0x50);
+			rcu_ahb_clock_config(RCU_AHB_CKSYS_DIV8);
+			soft_delay(0x50);
+			rcu_ahb_clock_config(RCU_AHB_CKSYS_DIV16);
+			soft_delay(0x50);
+			rcu_system_clock_source_config(RCU_CKSYSSRC_IRC16M);
+			soft_delay(200);
+			rcu_ahb_clock_config(RCU_AHB_CKSYS_DIV1);
+		}
+
+		pmu_to_deepsleepmode(PMU_LDO_LOWPOWER, PMU_LOWDRIVER_ENABLE,
+				     WFI_CMD);
 		sleeping_ = false;
+
+		// 6. 唤醒后恢复系统时钟 (深度睡眠关闭了 HXTAL+PLL)
+		SystemInit();
+		// 恢复 UART 波特率 (依赖 PLL 168MHz 时钟)
+		usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
+				   baudrate_code_to_hz(params_.baudrate_code));
+		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+
 		send_with_485("instrument wakeup\r\n");
 	}
 
