@@ -596,9 +596,9 @@ namespace HAL
 				GPIO_TX::init();
 				GPIO_RX::init();
 
+				usart_deinit(USARTx);	
 				rcu_periph_clock_enable(RCU_periph<USARTx>::periph);
 
-				usart_deinit(USARTx);
 				usart_baudrate_set(USARTx, baudval);
 				usart_parity_config(USARTx, paritycfg);
 				usart_word_length_set(USARTx, wlen);
