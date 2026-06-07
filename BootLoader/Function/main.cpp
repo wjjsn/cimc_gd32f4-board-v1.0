@@ -3,6 +3,7 @@
 // 地址空间: 0x08000000 - 0x0800FFFF (64K)
 // ============================================================
 
+#include "gd32f4xx.h"
 #include "hardware.hpp"
 #include "chry_ringbuffer.hpp"
 #include "SEGGER_RTT.h"
@@ -22,7 +23,7 @@
 constexpr uint32_t APP_START_ADDR = 0x08011000;
 constexpr uint32_t STAGING_ADDR = 0x08051000;
 constexpr uint32_t APP_SIZE = 128 * 1024;
-constexpr uint32_t STAGING_SIZE = 128 * 1024;
+constexpr uint32_t STAGING_SIZE = 7 * 1024;
 constexpr uint32_t SLICE_SIZE = 256;
 constexpr uint32_t MAGIC_WORD =
 	0x3CC3A55A; // ARM是小端序，《0x5AA5C33C》是错的;
@@ -109,19 +110,28 @@ static uint32_t addr_to_sector(uint32_t addr)
 
 static void flash_erase_range(uint32_t start, uint32_t size)
 {
+	SEGGER_RTT_printf(0, "闪存: 擦除范围 0x%08lX ~ 0x%08lX (%lu 字节)\r\n",
+			  start, start + size, size);
 	fmc_unlock();
 	fmc_flag_clear(FMC_FLAG_END | FMC_FLAG_OPERR | FMC_FLAG_WPERR |
 		       FMC_FLAG_PGMERR | FMC_FLAG_PGSERR);
+	uint32_t erased = 0;
 	for (uint32_t a = start; a < start + size; a += 4096) {
-		fmc_sector_erase(addr_to_sector(a));
+		uint32_t sec = addr_to_sector(a);
+		SEGGER_RTT_printf(0, "闪存:   擦除扇区 %lu @ 0x%08lX\r\n", sec,
+				  a);
+		fmc_sector_erase(sec);
 		fmc_flag_clear(FMC_FLAG_END | FMC_FLAG_OPERR | FMC_FLAG_WPERR |
 			       FMC_FLAG_PGMERR | FMC_FLAG_PGSERR);
+		erased += 4096;
 	}
 	fmc_lock();
+	SEGGER_RTT_printf(0, "闪存: 擦除完成, 共 %lu 字节\r\n", erased);
 }
 
 static void flash_write_word(uint32_t addr, uint32_t word)
 {
+	// RTT per word is too noisy; log only on first word of each 256B slice via flash_write_buffer
 	fmc_unlock();
 	fmc_flag_clear(FMC_FLAG_END | FMC_FLAG_OPERR | FMC_FLAG_WPERR |
 		       FMC_FLAG_PGMERR | FMC_FLAG_PGSERR);
@@ -165,20 +175,27 @@ static void jump_to_app()
 /// @return true = 收到 0502, false = 超时
 static bool wait_for_upgrade_command()
 {
+	SEGGER_RTT_WriteString(0, "升级: 等待 0502 命令 (开始升级)...\r\n");
 	for (int sec = UPGRADE_TIMEOUT_S; sec >= 1; --sec) {
 		char msg[64];
 		snprintf(msg, sizeof(msg),
-			 "wait for start Application(%ds)......\n", sec);
+			 "wait for start Application(%ds)......\r\n", sec);
 		send_with_485(msg);
+		SEGGER_RTT_printf(0, "升级: 超时倒计时 %d 秒\r\n", sec);
 		uint32_t dl = systick_tick_ms + 1000;
 		while (systick_tick_ms < dl) {
 			Protocol::Frame f;
 			if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
 			    read_u16(&f.data[5]) == 0x0502) {
+				SEGGER_RTT_printf(
+					0,
+					"升级: 收到 0502! 设备ID=0x%04X, 进入升级流程\r\n",
+					read_u16(&f.data[2]));
 				return true;
 			}
 		}
 	}
+	SEGGER_RTT_WriteString(0, "升级: 0502 超时! 跳转到 APP.\r\n");
 	return false;
 }
 
@@ -186,6 +203,9 @@ static bool wait_for_upgrade_command()
 static void flash_write_buffer(uint32_t addr, const uint8_t *data, uint32_t len)
 {
 	uint32_t aligned = (len + 3) & ~3u;
+	SEGGER_RTT_printf(0,
+			  "闪存: 写缓冲区到 0x%08lX, %lu 字节 (对齐后 %lu)\r\n",
+			  addr, len, aligned);
 	for (uint32_t i = 0; i < aligned; i += 4) {
 		uint32_t w =
 			data[i] |
@@ -200,12 +220,15 @@ static void flash_write_buffer(uint32_t addr, const uint8_t *data, uint32_t len)
 /// 超时条件: 最后字节到达后 5s 无新数据, 或暂存区写满
 /// @param[out] total_written  实际写入的字节数
 /// @return true = 魔术字校验通过
-static bool receive_firmware(uint32_t &total_written)
+static bool receive_firmware(uint16_t devid, uint32_t &total_written)
 {
-	flash_erase_range(STAGING_ADDR, STAGING_SIZE);
+	SEGGER_RTT_printf(
+		0, "升级: 开始接收固件, 设备ID=0x%04X, 暂存区 0x%08lX...\r\n",
+		devid, STAGING_ADDR);
 
 	uint8_t sbuf[SLICE_SIZE];
 	uint32_t spos = 0, total = 0, lrt = systick_tick_ms;
+	uint32_t last_log_kb = 0;
 
 	while (1) {
 		uint8_t b;
@@ -217,67 +240,149 @@ static bool receive_firmware(uint32_t &total_written)
 							   sbuf, SLICE_SIZE);
 					total += SLICE_SIZE;
 					spos = 0;
+					uint32_t kb_now = total / 1024;
+					if (kb_now != last_log_kb) {
+						SEGGER_RTT_printf(
+							0,
+							"升级:   已接收 %lu KB...\r\n",
+							kb_now);
+						last_log_kb = kb_now;
+					}
 				}
 				lrt = systick_tick_ms;
+			} else {
+				SEGGER_RTT_WriteString(
+					0, "升级: 暂存区溢出! 固件过大.\r\n");
+				return false;
 			}
 		}
-		if ((systick_tick_ms - lrt > 5000 && total > 0) ||
+		if ((systick_tick_ms - lrt > 500 && total > 0) ||
 		    total >= STAGING_SIZE)
 			break;
 	}
 
+	SEGGER_RTT_printf(0, "升级: 数据流结束. 总=%lu 字节, 尾部=%lu 字节\r\n",
+			  total, spos);
+
 	// 写入尾部不足 256 字节的剩余数据
 	if (spos > 0) {
+		SEGGER_RTT_printf(0, "升级: 写入尾部 %lu 字节到暂存区...\r\n",
+				  spos);
 		flash_write_buffer(STAGING_ADDR + total, sbuf, spos);
 		total += spos;
 	}
 
 	total_written = total;
-	return (*(volatile uint32_t *)STAGING_ADDR == MAGIC_WORD);
+	uint32_t magic = *(volatile uint32_t *)STAGING_ADDR;
+	SEGGER_RTT_printf(
+		0,
+		"升级: 固件接收完成: %u 字节, 魔术字=0x%08lX, 期望=0x%08lX\r\n",
+		total, magic, MAGIC_WORD);
+	bool ok = (magic == MAGIC_WORD);
+	if (!ok) {
+		SEGGER_RTT_WriteString(0,
+				       "升级: 魔术字不匹配! 固件被拒绝.\r\n");
+	}
+	return ok;
 }
 
 /// 等待 0503 命令并执行固件搬运: 擦除 App 区 → 暂存区复制到 App 区
-static void execute_upgrade(uint16_t devid, uint32_t fw_size)
+static bool execute_upgrade(uint16_t devid, uint32_t fw_size)
 {
-	send_ok(devid, 0x0502); // 魔术字校验通过, 应答 OK
+	SEGGER_RTT_WriteString(
+		0, "升级: 魔术字校验通过, 发送 0502-OK 给上位机...\r\n");
+	// 魔术字校验通过, 应答 OK
+	send_ok(devid, 0x0502);
+	SEGGER_RTT_WriteString(0, "升级: 等待 0503 命令 (提交升级)...\r\n");
 
 	while (1) {
 		Protocol::Frame f;
 		if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
 		    read_u16(&f.data[5]) == 0x0503) {
-			send_ok(read_u16(&f.data[2]), 0x0503);
+			SEGGER_RTT_printf(
+				0,
+				"升级: 收到 0503! 设备ID=0x%04X, 开始搬固件...\r\n",
+				read_u16(&f.data[2]));
+			send_ok(read_u16(&f.data[2]), 0x0503); //应答 OK
+
+			SEGGER_RTT_WriteString(0, "升级: 擦除 APP 区域...\r\n");
 			flash_erase_range(APP_START_ADDR, APP_SIZE);
+
 			// 跳过魔术字(前4字节), 只搬运固件本体
 			uint32_t fw_body = (fw_size >= 4) ? (fw_size - 4) : 0;
 			uint32_t copy_end = (fw_body + 3) & ~3u;
-			for (uint32_t off = 0; off < copy_end; off += 4)
+			SEGGER_RTT_printf(
+				0,
+				"升级: 搬运 %lu 字节 从暂存区(0x%08lX+4) 到 APP(0x%08lX)...\r\n",
+				copy_end, STAGING_ADDR, APP_START_ADDR);
+			for (uint32_t off = 0; off < copy_end; off += 4) {
 				flash_write_word(
 					APP_START_ADDR + off,
 					*(volatile uint32_t *)(STAGING_ADDR +
 							       4 + off));
-			break;
+				if ((off & 0x3FF) == 0) { // log every 1KB
+					SEGGER_RTT_printf(
+						0,
+						"升级:   已搬运 %lu / %lu 字节\r\n",
+						off, copy_end);
+				}
+			}
+			SEGGER_RTT_printf(
+				0, "升级: 搬运完成! %lu 字节已写入 APP.\r\n",
+				copy_end);
+			return true;
 		}
 	}
 }
 
 static void run_upgrade_mode()
 {
+	SEGGER_RTT_WriteString(0, "=== 升级: 进入升级模式 ===\r\n");
+
 	send_with_485("using command to interrupt start Application\r\n");
+	int loop_count = 0;
+	while (true) {
+		flash_erase_range(STAGING_ADDR, STAGING_SIZE);
+		SEGGER_RTT_printf(0, "升级: --- 升级循环 第 %d 轮 ---\r\n",
+				  ++loop_count);
+		if (!wait_for_upgrade_command()) {
+			SEGGER_RTT_WriteString(
+				0, "升级: 等待升级命令超时, 跳转到 APP.\r\n");
+			jump_to_app();
+			return;
+		}
 
-	if (!wait_for_upgrade_command()) {
-		jump_to_app();
-		return;
+		uint16_t devid = Params::g_params.device_id;
+		uint32_t fw_size = 0;
+		SEGGER_RTT_printf(
+			0,
+			"升级: 设备ID=0x%04X, 重置 UART 缓冲区准备接收固件...\r\n",
+			devid);
+
+		uart1_buffer::reset();
+		if (receive_firmware(devid, fw_size)) {
+			SEGGER_RTT_printf(
+				0,
+				"升级: 固件接收成功, fw_size=%lu, 进入固件搬运...\r\n",
+				fw_size);
+			auto execute_upgrade_stutus =
+				execute_upgrade(devid, fw_size);
+			SEGGER_RTT_WriteString(
+				0, "升级: 固件搬运完成! 系统即将复位...\r\n");
+			if (execute_upgrade_stutus) {
+				break;
+			}
+		} else {
+			SEGGER_RTT_WriteString(
+				0,
+				"升级: 固件接收失败! 发送错误应答, 重置缓冲区.\r\n");
+			send_error(devid);
+			// 魔术字校验失败, 丢弃后续数据
+			uart1_buffer::reset();
+		}
 	}
 
-	uint16_t devid = Params::g_params.device_id;
-	uint32_t fw_size = 0;
-
-	if (receive_firmware(fw_size)) {
-		execute_upgrade(devid, fw_size);
-	} else {
-		send_error(devid);
-	}
-
+	SEGGER_RTT_WriteString(0, "升级: 完成, 通过 NVIC 复位...\r\n");
 	delay_ms(100);
 	NVIC_SystemReset();
 }
@@ -305,6 +410,7 @@ int main(void)
 	device_init_all();
 	uart1_buffer::init();
 	USART1::enable_it(0, 0);
+	NVIC_SetPriority(USART1_IRQn, 0x00U);
 	Params::load();
 	g_proto.init();
 	// if ( //Power reset generated
@@ -333,7 +439,7 @@ int main(void)
 			SEGGER_RTT_WriteString(0, "SysTick config failed!\r\n");
 		}
 	}
-	NVIC_SetPriority(SysTick_IRQn, 0x00U);
+	NVIC_SetPriority(SysTick_IRQn, 0x01U);
 	SEGGER_RTT_WriteString(0, "=== CIMC Bootloader ===\r\n");
 
 	rcu_periph_clock_enable(RCU_BKPSRAM);
@@ -341,9 +447,9 @@ int main(void)
 	bool up = (*BOOTLOADER_FLAG_ADDR == BOOTLOADER_MAGIC);
 	*BOOTLOADER_FLAG_ADDR = 0;
 
-	if (up)
+	if (up) {
 		run_upgrade_mode();
-	else
+	} else
 		delay_ms(BOOT_TIMEOUT_S * 1000);
 
 	g_screen.chear();
