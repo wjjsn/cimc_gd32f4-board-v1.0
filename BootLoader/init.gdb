@@ -1,3 +1,3 @@
 target remote localhost:50000
-monitor reset
+monitor reset 2
 load
