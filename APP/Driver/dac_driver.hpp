@@ -1,7 +1,7 @@
 #pragma once
 // DAC0 输出驱动 — PA4
 
-#include "hal.hpp"
+#include "gd32f4xx_dac.h"
 #include <cstdint>
 
 inline void dac_init()
