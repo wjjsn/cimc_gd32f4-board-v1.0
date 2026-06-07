@@ -346,6 +346,8 @@ int main(void)
 	else
 		delay_ms(BOOT_TIMEOUT_S * 1000);
 
+	g_screen.chear();
+
 	jump_to_app();
 	while (1)
 		__asm__ volatile("nop");
