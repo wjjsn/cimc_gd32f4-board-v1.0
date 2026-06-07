@@ -368,8 +368,12 @@ class CommandHandler {
 	void cmd_set_dac(const ProtocolFrame &f) {
 		if (frame_content_len(f) >= 2) {
 			uint16_t val = read_u16(frame_content(f));
-			if (val <= 4095) { dac_set(val); send_ok(frame_devid(f), 0x0301); }
-			else send_error(frame_devid(f));
+			if (val <= 4095) {
+				dac_set(val);
+				dac_software_trigger_enable(DAC0, DAC_OUT0);
+				send_ok(frame_devid(f), 0x0301);
+			} else
+				send_error(frame_devid(f));
 		} else send_error(frame_devid(f));
 	}
 

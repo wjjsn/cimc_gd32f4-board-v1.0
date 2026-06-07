@@ -83,6 +83,7 @@ int main(void)
 
 		// ADC0 (CH0 电位器: PC0=CH10, CH1 DAC回读: PC1=CH11)
 		ADC0_GPIO::init();
+		READ_BACK_DAC::init();
 		ADC0::init();
 
 		// RTC

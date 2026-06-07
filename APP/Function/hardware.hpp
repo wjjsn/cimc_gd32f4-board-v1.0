@@ -23,6 +23,10 @@ using ADC0_GPIO =
 	HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOC_ADDR, GPIO_PIN_0,
 			  GPIO_MODE_ANALOG, GPIO_PUPD_PULLDOWN,
 			  HAL::gd32f4::AnalogConfig>;
+using READ_BACK_DAC =
+	HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOC_ADDR, GPIO_PIN_1,
+			  GPIO_MODE_ANALOG, GPIO_PUPD_PULLDOWN,
+			  HAL::gd32f4::AnalogConfig>;
 
 using KEY1_GPIO =
 	HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOB_ADDR, GPIO_PIN_11,
