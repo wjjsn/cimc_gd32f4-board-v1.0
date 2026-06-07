@@ -16,7 +16,7 @@ namespace DeviceState
 {
 
 // ===================== OLED =====================
-constexpr char TEAM_ID[] = "CIMC2026";
+constexpr char TEAM_ID[] = "2026523446";
 
 enum class OLEDStatus : uint8_t {
 	BOOTLOADER = 0,

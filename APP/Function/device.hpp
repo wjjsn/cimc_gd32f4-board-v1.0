@@ -174,7 +174,7 @@ template <typename RingBuffer> class Device {
 		last = oled_status_;
 
 		g_screen.chear();
-		g_screen.printf(0, 0, "%s", "ID:2026523446");
+		g_screen.printf(0, 0, "%s", "2026523446");
 		const char *line2;
 		switch (oled_status_) {
 		case OLEDStatus::BOOTLOADER: line2 = "Bootloader";  break;
