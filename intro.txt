@@ -1,0 +1,18 @@
+队伍编号：2026523446
+开发环境：
+    宿主机：Windows_NT x64 10.0.26200
+    系统版本：Linux 6.6.87.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun  5 18:30:46 UTC 2025 x86_64 GNU/Linux
+    IDE：Visual Studio Code(Version: 1.122.1)
+        Electron: 39.8.8
+        ElectronBuildId: 13870025
+        Chromium: 142.0.7444.265
+        Node.js: 22.22.1
+        V8: 14.2.231.22-electron.0
+    编译器：arm-none-eabi-gcc (15:14.2.rel1-1) 14.2.1 20241119
+    链接器：GNU ld (2.42-1ubuntu1+23) 2.42
+    调试器：SEGGER J-Link GDB Server V9.32 
+    固件库：V3.3.3, firmware for GD32F4xx
+           CMSIS Cortex-M4 Core Peripheral Access Layer：V3.30
+    版本控制系统(VCS)：git version 2.51.0
+
+
