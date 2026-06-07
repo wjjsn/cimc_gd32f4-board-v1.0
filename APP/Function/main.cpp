@@ -48,6 +48,9 @@ using Scheduler = StaticTimerManager<
 	// 50ms: 告警分批发送驱动 (每条记录间隔 50ms)
 	TaskConfig{ 50, [] { g_device.alarm_send_tick(systick_tick_ms); } },
 
+	// 50ms: 睡眠状态机驱动 (OK 帧发送后延迟 ≥20ms 再入眠)
+	TaskConfig{ 50, [] { g_device.sleep_tick(systick_tick_ms); } },
+
 	// 500ms: OLED 刷新
 	TaskConfig{ 500, [] { g_device.oled_update(); } },
 

@@ -67,11 +67,13 @@ inline const uint8_t *frame_content(const ProtocolFrame &f) { return &f.data[9];
 inline float read_ch0()
 {
 	ADC0::set_channel(ADC_CHANNEL_10);
+	ADC0::get_value(); // 空读消除通道切换后的采样电容残余电压
 	return ADC0::get_value() * 3.3f / 4095.0f;
 }
 inline float read_ch1()
 {
 	ADC0::set_channel(ADC_CHANNEL_11);
+	ADC0::get_value(); // 空读消除通道切换后的采样电容残余电压
 	return ADC0::get_value() * 3.3f / 4095.0f;
 }
 inline float read_ch2()
@@ -231,6 +233,10 @@ class CommandHandler {
 	int alarm_send_index_ = 0;
 	uint32_t alarm_send_next_ms_ = 0;
 
+	// ——— 睡眠状态机 ———
+	enum class SleepPhase : uint8_t { IDLE, WAIT_TX };
+	SleepPhase sleep_phase_ = SleepPhase::IDLE;
+
 	// ——— 参数持久化 ———
 	void params_save()
 	{
@@ -386,16 +392,26 @@ class CommandHandler {
 	}
 
 	void cmd_sleep(const ProtocolFrame &f) {
+		// 阶段1: 回复 OK 后立即返回, 睡眠入口交给调度器的 sleep_tick 延迟执行
 		send_ok(frame_devid(f), 0x03AA);
-		// 等待发送完成
-		for (int i = 0; i < 100000; ++i) __asm__ volatile("nop");
+		sleep_phase_ = SleepPhase::WAIT_TX;
+	}
+
+	/// 睡眠入口驱动 (由调度器周期性调用, 传入当前 systick)
+	public:
+	void sleep_tick(uint32_t systick_ms)
+	{
+		if (sleep_phase_ != SleepPhase::WAIT_TX) return;
+		sleep_phase_ = SleepPhase::IDLE;
+
+		// ——— 阶段2: 进入深度睡眠 (OK 帧已由 50ms 调度延迟充分发完) ———
 
 		// 1. 清除残留标志
 		rtc_alarm_disable(RTC_ALARM0);
 		rtc_flag_clear(RTC_FLAG_ALRM0);
 		exti_flag_clear(EXTI_17);
 
-		// 2. 配置 EXTI line 17 (先 deinit 再 init, 对齐参考工程)
+		// 2. 配置 EXTI line 17
 		exti_deinit();
 		exti_init(EXTI_17, EXTI_INTERRUPT, EXTI_TRIG_RISING);
 		rtc_flag_clear(RTC_FLAG_ALRM0);
@@ -405,7 +421,7 @@ class CommandHandler {
 		// 3. 使能 NVIC RTC 闹钟中断
 		nvic_irq_enable(RTC_Alarm_IRQn, 2U, 1U);
 
-		// 4. 配置 RTC 闹钟 (10 秒后; second 是 BCD 格式, 必须用 bcd_to_dec/dec_to_bcd)
+		// 4. 配置 RTC 闹钟
 		rtc_alarm_struct alarm = {};
 		auto t = RTC::get_time();
 		alarm.alarm_mask = RTC_ALARM_DATE_MASK | RTC_ALARM_HOUR_MASK | RTC_ALARM_MINUTE_MASK;
@@ -421,8 +437,7 @@ class CommandHandler {
 
 		sleeping_ = true;
 
-		// 5. HCLK 降频序列 (防 Vcore 波动导致自锁死, GD32F4xx 强烈建议)
-		//    参考: Deepsleep_wakeup_RTC/main.c 第 85-96 行
+		// 5. HCLK 降频序列
 		{
 			auto soft_delay = [](uint32_t time) {
 				__IO uint32_t ii;
@@ -445,12 +460,14 @@ class CommandHandler {
 				     WFI_CMD);
 		sleeping_ = false;
 
-		// 6. 唤醒后恢复系统时钟 (深度睡眠关闭了 HXTAL+PLL)
+		// 6. 唤醒后恢复系统时钟
 		SystemInit();
-		// 恢复 UART 波特率 (依赖 PLL 168MHz 时钟)
 		usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
 				   baudrate_code_to_hz(params_.baudrate_code));
 		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+
+		// 唤醒后 UART 电平稳定延时 (深度睡眠后调度器未恢复, 用 nop)
+		for (int i = 0; i < 1000000; ++i) __asm__ volatile("nop");
 
 		send_with_485("instrument wakeup");
 	}
@@ -500,7 +517,12 @@ class CommandHandler {
 
 	void cmd_get_alarms(const ProtocolFrame &f) {
 		(void)f;
-		if (alarms_.record_count_ == 0) { send_with_485("empty \r\n"); return; }
+		if (alarms_.record_count_ == 0) {
+			// 微秒级缓冲: 防止自动化脚本连续收发导致 RS485 总线冲突
+			for (int i = 0; i < 50000; ++i) __asm__ volatile("nop");
+			send_with_485("empty \r\n");
+			return;
+		}
 		// 启动分批发送状态机: 每条记录独立发送, 间隔由 alarm_send_tick 控制
 		alarm_send_index_ = 0;
 		alarm_send_active_ = true;

@@ -201,6 +201,11 @@ template <typename RingBuffer> class Device {
 		if (cmd_handler_) cmd_handler_->alarm_send_tick(systick_ms);
 	}
 
+	void sleep_tick(uint32_t systick_ms)
+	{
+		if (cmd_handler_) cmd_handler_->sleep_tick(systick_ms);
+	}
+
     private:
 	void params_set_defaults()
 	{
