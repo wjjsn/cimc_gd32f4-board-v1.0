@@ -9,7 +9,8 @@
 #include "SEGGER_RTT.h"
 
 // 协议层
-#include "../Protocol/protocol.hpp"
+#include "../Protocol/protocol_parser.hpp"
+#include "../Protocol/response_builder.hpp"
 
 // Driver 层
 #include "../Driver/serial_send.hpp"
@@ -17,7 +18,47 @@
 
 // Function 层
 #include "params.hpp"
-#include "device_state.hpp"
+
+// ===================== OLED 状态 =====================
+enum class OLEDStatus : uint8_t {
+	BOOTLOADER = 0,
+	IDLE = 1,
+	AUTO_SAMPLE = 2,
+};
+
+constexpr char TEAM_ID[] = "2026523446";
+
+inline OLEDStatus g_oled_status = OLEDStatus::IDLE;
+
+/// 刷新 OLED 双行显示
+inline void oled_update()
+{
+	static OLEDStatus last_status =
+		static_cast<OLEDStatus>(255); // 强制首次刷新
+
+	if (g_oled_status == last_status)
+		return;
+	last_status = g_oled_status;
+
+	g_screen.chear();
+	g_screen.printf(0, 0, "%s", TEAM_ID);
+	const char *line2 = "IDLE";
+	switch (g_oled_status) {
+	case OLEDStatus::BOOTLOADER:
+		line2 = "Bootloader";
+		break;
+	case OLEDStatus::IDLE:
+		line2 = "IDLE";
+		break;
+	case OLEDStatus::AUTO_SAMPLE:
+		line2 = "AutoSample";
+		break;
+	default:
+		break;
+	}
+	g_screen.printf(2, 0, "%s", line2);
+	g_screen.update_force();
+}
 
 // ===================== 常量定义 =====================
 constexpr uint32_t APP_START_ADDR = 0x08011000;
@@ -38,11 +79,49 @@ chry_ringbuffer_t ctx_uart1_buffer;
 using uart1_buffer = Cherry_RingBuffer<&ctx_uart1_buffer, 8192>;
 
 // ===================== 协议解析器 =====================
-Protocol::Parser<uart1_buffer> g_proto;
+ProtocolParser<uart1_buffer> g_proto;
 
 // ===================== 全局外设实例 =====================
-ADC g_adc;
+gd30ad3340_on_i2c0 g_adc;
 Screen g_screen;
+
+// ===================== 设备参数 =====================
+DeviceParams g_params;
+
+/// 恢复默认参数并写入 Flash
+static void params_set_defaults()
+{
+	g_params.magic = PARAM_MAGIC;
+	g_params.device_id = 0x0001;
+	g_params.baudrate_code = 0x13; // 19200
+	g_params.reserved0 = 0;
+	g_params.ch0_ratio = 1.0f;
+	g_params.ch1_ratio = 1.0f;
+	g_params.ch0_threshold = 100.0f;
+	g_params.ch1_threshold = 100.0f;
+	g_params.ch2_threshold = 100.0f;
+	g_params.alarm_mode = 0x02; // 不主动上报
+	g_params.report_interval = 0x01; // 1s
+	g_params.reserved1[0] = 0;
+	g_params.reserved1[1] = 0;
+	g_params.crc32 = 0;
+	FlashParam::save(g_params);
+}
+
+/// 从 Flash 加载参数, 无效则恢复默认
+static void params_load()
+{
+	FlashParam::load(g_params);
+	if (g_params.magic != PARAM_MAGIC) {
+		params_set_defaults();
+		return;
+	}
+	uint32_t calc = params_crc32_calc(
+		reinterpret_cast<const uint8_t *>(&g_params),
+		sizeof(DeviceParams) - sizeof(uint32_t));
+	if (calc != g_params.crc32)
+		params_set_defaults();
+}
 
 // ===================== SysTick =====================
 static volatile uint32_t systick_tick_ms = 0;
@@ -66,16 +145,15 @@ static void delay_ms(uint32_t ms)
 		__asm__ volatile("nop");
 }
 
-static bool poll_frame(Protocol::Frame &frame)
+static bool poll_frame(ProtocolFrame &frame)
 {
-	return g_proto.poll(frame) == Protocol::Status::frame_ready;
+	return g_proto.poll(frame) == ProtocolStatus::frame_ready;
 }
 
 static void send_ok(uint16_t devid, uint16_t cmd)
 {
 	uint8_t buf[64];
-	uint16_t sz =
-		Protocol::Response::build_ok(devid, cmd, buf, sizeof(buf));
+	uint16_t sz = ResponseBuilder::build_ok(devid, cmd, buf, sizeof(buf));
 	if (sz)
 		send_with_485(buf, sz);
 }
@@ -83,7 +161,7 @@ static void send_ok(uint16_t devid, uint16_t cmd)
 static void send_error(uint16_t devid)
 {
 	uint8_t buf[64];
-	uint16_t sz = Protocol::Response::build_error(devid, buf, sizeof(buf));
+	uint16_t sz = ResponseBuilder::build_error(devid, buf, sizeof(buf));
 	if (sz)
 		send_with_485(buf, sz);
 }
@@ -184,7 +262,7 @@ static bool wait_for_upgrade_command()
 		SEGGER_RTT_printf(0, "升级: 超时倒计时 %d 秒\r\n", sec);
 		uint32_t dl = systick_tick_ms + 1000;
 		while (systick_tick_ms < dl) {
-			Protocol::Frame f;
+			ProtocolFrame f;
 			if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
 			    read_u16(&f.data[5]) == 0x0502) {
 				SEGGER_RTT_printf(
@@ -296,7 +374,7 @@ static bool execute_upgrade(uint16_t devid, uint32_t fw_size)
 	SEGGER_RTT_WriteString(0, "升级: 等待 0503 命令 (提交升级)...\r\n");
 
 	while (1) {
-		Protocol::Frame f;
+		ProtocolFrame f;
 		if (poll_frame(f) && f.size >= 8 && f.data[4] == 0x01 &&
 		    read_u16(&f.data[5]) == 0x0503) {
 			SEGGER_RTT_printf(
@@ -352,7 +430,7 @@ static void run_upgrade_mode()
 			return;
 		}
 
-		uint16_t devid = Params::g_params.device_id;
+		uint16_t devid = g_params.device_id;
 		uint32_t fw_size = 0;
 		SEGGER_RTT_printf(
 			0,
@@ -389,21 +467,6 @@ static void run_upgrade_mode()
 
 // ===================== main =====================
 constexpr uint32_t DEFAULT_BAUDRATE = 19200;
-inline uint32_t baudrate_code_to_hz(uint8_t code)
-{
-	switch (code) {
-	case 0x11:
-		return 4800;
-	case 0x12:
-		return 9600;
-	case 0x13:
-		return 19200;
-	case 0x14:
-		return 115200;
-	default:
-		return 19200;
-	}
-}
 extern "C" {
 int main(void)
 {
@@ -411,7 +474,7 @@ int main(void)
 	uart1_buffer::init();
 	USART1::enable_it(0, 0);
 	NVIC_SetPriority(USART1_IRQn, 0x00U);
-	Params::load();
+	params_load();
 	g_proto.init();
 	// if ( //Power reset generated
 	// 	RESET != rcu_flag_get(RCU_FLAG_PORRST) ||
@@ -426,13 +489,13 @@ int main(void)
 	// else if (RESET != rcu_flag_get(RCU_FLAG_SWRST)) {
 		usart_baudrate_set(
 			HAL::gd32f4::registers::USART1_ADDR,
-			baudrate_code_to_hz(Params::g_params.baudrate_code));
+			baudrate_code_to_hz(g_params.baudrate_code));
 		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
 	// }
 	rcu_all_reset_flag_clear();
 
-	DeviceState::g_oled_status = DeviceState::OLEDStatus::BOOTLOADER;
-	DeviceState::oled_update();
+	g_oled_status = OLEDStatus::BOOTLOADER;
+	oled_update();
 
 	if (SysTick_Config(SystemCoreClock / 1000U)) {
 		while (1) {

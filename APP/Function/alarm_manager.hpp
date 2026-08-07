@@ -55,29 +55,29 @@ class AlarmManager {
 	{
 		// 备份参数区数据 (DeviceParams 区域: offset 0 ~ ALARM_FLASH_OFFSET)
 		uint8_t param_buf[ALARM_FLASH_OFFSET];
-		flash_param_read(0, param_buf, sizeof(param_buf));
+		FlashParam::read(0, param_buf, sizeof(param_buf));
 
 		// 擦除整个扇区 (4KB)
-		flash_param_erase_sector();
+		FlashParam::erase_sector();
 
 		// 恢复参数区
-		flash_param_write(0, param_buf, sizeof(param_buf));
+		FlashParam::write(0, param_buf, sizeof(param_buf));
 
 		// 写入告警数据
-		flash_param_write(ALARM_FLASH_OFFSET, &record_count_,
+		FlashParam::write(ALARM_FLASH_OFFSET, &record_count_,
 				  sizeof(record_count_));
-		flash_param_write(ALARM_FLASH_OFFSET + 4, records_,
+		FlashParam::write(ALARM_FLASH_OFFSET + 4, records_,
 				  sizeof(records_));
 	}
 
 	/// 从 Flash 加载告警
 	void load_from_flash()
 	{
-		flash_param_read(ALARM_FLASH_OFFSET, &record_count_,
+		FlashParam::read(ALARM_FLASH_OFFSET, &record_count_,
 				 sizeof(record_count_));
 		if (record_count_ > MAX_RECORDS)
 			record_count_ = 0;
-		flash_param_read(ALARM_FLASH_OFFSET + 4, records_,
+		FlashParam::read(ALARM_FLASH_OFFSET + 4, records_,
 				 sizeof(records_));
 	}
 

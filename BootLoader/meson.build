@@ -26,7 +26,6 @@ lds = meson.current_source_dir()/'bootloader_flash.ld'
 # ===================== Bootloader 可执行文件 =====================
 executable('bootloader.elf', files(
     'Function'/'main.cpp',
-    'Protocol'/'protocol.cpp',
 ),
     dependencies: dependencies,
     link_args: [
