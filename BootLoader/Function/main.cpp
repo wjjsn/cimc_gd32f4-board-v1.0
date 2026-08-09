@@ -104,7 +104,9 @@ static void params_set_defaults()
 	g_params.report_interval = 0x01; // 1s
 	g_params.reserved1[0] = 0;
 	g_params.reserved1[1] = 0;
-	g_params.crc32 = 0;
+	g_params.crc32 = params_crc32_calc(
+		reinterpret_cast<const uint8_t *>(&g_params),
+		sizeof(DeviceParams) - sizeof(uint32_t));
 	FlashParam::save(g_params);
 }
 
