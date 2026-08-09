@@ -59,10 +59,10 @@ using DAC0_GPIO = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOA_ADDR,
 // ========== I2C 总线配置 ==========
 // I2C0: SCL = PB8, SDA = PB9, AF4
 using I2C0_SCL = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOB_ADDR,
-				   GPIO_PIN_8, GPIO_MODE_AF, GPIO_PUPD_NONE,
+				   GPIO_PIN_8, GPIO_MODE_AF, GPIO_PUPD_PULLUP,
 				   HAL::gd32f4::AFConfig<GPIO_AF_4> >;
 using I2C0_SDA = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOB_ADDR,
-				   GPIO_PIN_9, GPIO_MODE_AF, GPIO_PUPD_NONE,
+				   GPIO_PIN_9, GPIO_MODE_AF, GPIO_PUPD_PULLUP,
 				   HAL::gd32f4::AFConfig<GPIO_AF_4> >;
 
 using I2C0_BUS = HAL::gd32f4::I2C_bus<I2C0_SDA, I2C0_SCL,

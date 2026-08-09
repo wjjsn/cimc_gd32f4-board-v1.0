@@ -470,6 +470,10 @@ constexpr uint32_t DEFAULT_BAUDRATE = 19200;
 extern "C" {
 int main(void)
 {
+	SCB->VTOR = 0x08000000U;
+	__DSB();
+	__ISB();
+
 	device_init_all();
 	uart1_buffer::init();
 	USART1::enable_it(0, 0);

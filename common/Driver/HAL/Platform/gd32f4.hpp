@@ -323,6 +323,10 @@ struct GPIO<GPIOx, Pin, GPIO_MODE_AF, PULL, AFConfig<AF_NUM> > {
 		gpio_mode_set(GPIOx, GPIO_MODE_AF, PULL, Pin);
 		gpio_af_set(GPIOx, AF_NUM, Pin);
 	}
+	static void output_options_set(uint8_t otype, uint32_t speed)
+	{
+		gpio_output_options_set(GPIOx, otype, speed, Pin);
+	}
 	static void set()
 	{
 		gpio_bit_write(GPIOx, Pin, SET);
@@ -392,8 +396,10 @@ requires(GPIO_SDA::af_config::af_num == GPIO_AF_4 &&
 	{
 		GPIO_SDA::init();
 		GPIO_SCL::init();
-		i2c_deinit(periph);
 		rcu_periph_clock_enable(RCU_periph<I2Cx>::periph);
+		GPIO_SDA::output_options_set(GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ);
+		GPIO_SCL::output_options_set(GPIO_OTYPE_OD, GPIO_OSPEED_50MHZ);
+		i2c_deinit(periph);
 
 		i2c_clock_config(I2Cx, clkspeed, I2C_DTCY_2);
 		i2c_mode_addr_config(I2Cx, I2C_I2CMODE_ENABLE,
@@ -431,39 +437,52 @@ requires(GPIO_SDA::af_config::af_num == GPIO_AF_4 &&
 			    uint32_t t)
 	{
 		(void)t;
+		if (n == 0)
+			return;
+
+		i2c_ackpos_config(I2Cx, n == 2 ? I2C_ACKPOS_NEXT :
+						 I2C_ACKPOS_CURRENT);
+		i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
 		while (i2c_flag_get(I2Cx, I2C_FLAG_I2CBSY))
 			;
 		i2c_start_on_bus(I2Cx);
 		while (!i2c_flag_get(I2Cx, I2C_FLAG_SBSEND))
 			;
 		i2c_master_addressing(I2Cx, slave_addr, I2C_RECEIVER);
+		if (n < 3)
+			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
 		while (!i2c_flag_get(I2Cx, I2C_FLAG_ADDSEND))
 			;
-		i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
 		if (n == 1) {
-			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
-			while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
-				;
-			*p = i2c_data_receive(I2Cx);
+			i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
 			i2c_stop_on_bus(I2Cx);
-		} else {
 			while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
 				;
 			*p = i2c_data_receive(I2Cx);
-			for (uint16_t i = 1; i < n - 1; i++) {
-				i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
+		} else {
+			i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
+			uint16_t remaining = n;
+			while (remaining) {
+				if (remaining == 3) {
+					while (!i2c_flag_get(I2Cx, I2C_FLAG_BTC))
+						;
+					i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
+				}
+				if (remaining == 2) {
+					while (!i2c_flag_get(I2Cx, I2C_FLAG_BTC))
+						;
+					i2c_stop_on_bus(I2Cx);
+				}
 				while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
 					;
-				*(p + i) = i2c_data_receive(I2Cx);
+				*p++ = i2c_data_receive(I2Cx);
+				remaining--;
 			}
-			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
-			while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
-				;
-			*(p + n - 1) = i2c_data_receive(I2Cx);
-			i2c_stop_on_bus(I2Cx);
 		}
 		while (I2C_CTL0(I2Cx) & I2C_CTL0_STOP)
 			;
+		i2c_ackpos_config(I2Cx, I2C_ACKPOS_CURRENT);
+		i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
 	}
 };
 
@@ -521,7 +540,13 @@ template <typename bus_t, uint8_t slave_address> struct I2C_device_addr {
 	static void mem_read(uint16_t reg, uint8_t *p, uint16_t n, uint32_t t)
 	{
 		(void)t;
+		if (n == 0)
+			return;
+
 		const uint32_t I2Cx = bus_t::periph;
+		i2c_ackpos_config(I2Cx, n == 2 ? I2C_ACKPOS_NEXT :
+						 I2C_ACKPOS_CURRENT);
+		i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
 		while (i2c_flag_get(I2Cx, I2C_FLAG_I2CBSY))
 			;
 		i2c_start_on_bus(I2Cx);
@@ -541,33 +566,41 @@ template <typename bus_t, uint8_t slave_address> struct I2C_device_addr {
 		while (!i2c_flag_get(I2Cx, I2C_FLAG_SBSEND))
 			;
 		i2c_master_addressing(I2Cx, slave_address, I2C_RECEIVER);
+		if (n < 3)
+			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
 		while (!i2c_flag_get(I2Cx, I2C_FLAG_ADDSEND))
 			;
-		i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
 
 		if (n == 1) {
-			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
-			while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
-				;
-			*p = i2c_data_receive(I2Cx);
+			i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
 			i2c_stop_on_bus(I2Cx);
-		} else {
 			while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
 				;
 			*p = i2c_data_receive(I2Cx);
-			i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
-			for (uint16_t i = 1; i < n - 1; i++) {
+		} else {
+			i2c_flag_clear(I2Cx, I2C_FLAG_ADDSEND);
+			uint16_t remaining = n;
+			while (remaining) {
+				if (remaining == 3) {
+					while (!i2c_flag_get(I2Cx, I2C_FLAG_BTC))
+						;
+					i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
+				}
+				if (remaining == 2) {
+					while (!i2c_flag_get(I2Cx, I2C_FLAG_BTC))
+						;
+					i2c_stop_on_bus(I2Cx);
+				}
 				while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE))
 					;
-				*(p + i) = i2c_data_receive(I2Cx);
+				*p++ = i2c_data_receive(I2Cx);
+				remaining--;
 			}
-			i2c_ack_config(I2Cx, I2C_ACK_DISABLE);
-			// while (!i2c_flag_get(I2Cx, I2C_FLAG_RBNE));
-			*(p + n - 1) = i2c_data_receive(I2Cx);
-			i2c_stop_on_bus(I2Cx);
 		}
 		while (I2C_CTL0(I2Cx) & I2C_CTL0_STOP)
 			;
+		i2c_ackpos_config(I2Cx, I2C_ACKPOS_CURRENT);
+		i2c_ack_config(I2Cx, I2C_ACK_ENABLE);
 	}
 };
 

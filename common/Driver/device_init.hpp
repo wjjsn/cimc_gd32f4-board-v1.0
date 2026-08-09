@@ -15,17 +15,12 @@ inline void device_init_all()
 	system_status_led::init();
 	work_status_led::init();
 
-	// I2C + OLED + 外部ADC
+	// I2C + OLED
 	I2C0_SCL::init();
 	I2C0_SDA::init();
 	I2C0_BUS::init();
 
 	g_screen.init();
-	g_adc.init(gd30ad3340_on_i2c0::MUX_AIN0_GND,
-		   gd30ad3340_on_i2c0::PGA_2048,
-		   gd30ad3340_on_i2c0::MODE_CONTINUOUS,
-		   gd30ad3340_on_i2c0::DR_100,
-		   gd30ad3340_on_i2c0::COMP_QUE_DIS);
 
 	// ADC0 (CH0 电位器: PC0=CH10, CH1 DAC回读: PC1=CH11)
 	ADC0_GPIO::init();
