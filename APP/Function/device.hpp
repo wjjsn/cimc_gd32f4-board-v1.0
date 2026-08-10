@@ -222,13 +222,13 @@ template <typename RingBuffer> class Device {
 	void params_save()
 	{
 		params_.crc32 = params_crc32_calc(reinterpret_cast<const uint8_t*>(&params_), sizeof(DeviceParams) - 4);
-		flash_param_save(params_);
+		FlashParam::save(params_);
 		// 恢复告警数据 (params_save 擦除了整个扇区)
 		alarms_.save_to_flash();
 	}
 	void load_params()
 	{
-		flash_param_load(params_);
+		FlashParam::load(params_);
 		if (params_.magic != PARAM_MAGIC) { params_set_defaults(); params_save(); return; }
 		uint32_t calc = params_crc32_calc(reinterpret_cast<const uint8_t*>(&params_), sizeof(DeviceParams) - 4);
 		if (calc != params_.crc32) { params_set_defaults(); params_save(); }

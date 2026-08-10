@@ -1,1 +1,0 @@
-请使用[HAL](https://github.com/wjjsn/HAL)或手动提供硬件方法

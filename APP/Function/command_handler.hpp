@@ -7,7 +7,6 @@
 #include "../Protocol/protocol_types.hpp"
 #include "../Protocol/response_builder.hpp"
 #include "../Driver/serial_send.hpp"
-#include "../Driver/dac_driver.hpp"
 #include "../Driver/flash_param.hpp"
 #include <cstdio>
 #include <cstring>
@@ -241,7 +240,7 @@ class CommandHandler {
 	void params_save()
 	{
 		params_.crc32 = params_crc32_calc(reinterpret_cast<const uint8_t *>(&params_), sizeof(DeviceParams) - 4);
-		flash_param_save(params_);
+		FlashParam::save(params_);
 		alarms_.save_to_flash();
 	}
 
@@ -369,8 +368,8 @@ class CommandHandler {
 		if (frame_content_len(f) >= 2) {
 			uint16_t val = read_u16(frame_content(f));
 			if (val <= 4095) {
-				dac_set(val);
-				dac_software_trigger_enable(DAC0, DAC_OUT0);
+				DAC0::set(val);
+				DAC0::trigger();
 				send_ok(frame_devid(f), 0x0301);
 			} else
 				send_error(frame_devid(f));
