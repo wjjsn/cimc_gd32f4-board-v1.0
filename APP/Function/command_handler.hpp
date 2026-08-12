@@ -8,6 +8,7 @@
 #include "../Protocol/response_builder.hpp"
 #include "../Driver/serial_send.hpp"
 #include "../Driver/flash_param.hpp"
+#include "modbus_slave.hpp"
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -140,13 +141,13 @@ class CommandHandler {
 		       OLEDStatus &oled_status,
 		       bool &auto_report_active, uint32_t &auto_report_next,
 		       uint32_t &auto_report_interval_ms,
-		       bool &is_sampling, bool &sleeping)
+		       bool &is_sampling, bool &sleeping, uint16_t &dac_raw)
 		: params_(params), alarms_(alarms),
 		  oled_status_(oled_status),
 		  auto_report_active_(auto_report_active),
 		  auto_report_next_(auto_report_next),
 		  auto_report_interval_ms_(auto_report_interval_ms),
-		  is_sampling_(is_sampling), sleeping_(sleeping)
+		  is_sampling_(is_sampling), sleeping_(sleeping), dac_raw_(dac_raw)
 	{}
 
 	void handle_frame(const ProtocolFrame &frame)
@@ -226,6 +227,7 @@ class CommandHandler {
 	uint32_t &auto_report_interval_ms_;
 	bool &is_sampling_;
 	bool &sleeping_;
+	uint16_t &dac_raw_;
 
 	// ——— 告警分批发送状态机 ———
 	bool alarm_send_active_ = false;
@@ -368,6 +370,7 @@ class CommandHandler {
 		if (frame_content_len(f) >= 2) {
 			uint16_t val = read_u16(frame_content(f));
 			if (val <= 4095) {
+				dac_raw_ = val;
 				DAC0::set(val);
 				DAC0::trigger();
 				send_ok(frame_devid(f), 0x0301);
@@ -439,6 +442,7 @@ class CommandHandler {
 		rtc_alarm_enable(RTC_ALARM0);
 
 		sleeping_ = true;
+		modbus_slave_suspend();
 
 		// 5. HCLK 降频序列
 		{
@@ -468,6 +472,8 @@ class CommandHandler {
 		usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
 				   baudrate_code_to_hz(params_.baudrate_code));
 		usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+		if (!modbus_slave_resume())
+			SEGGER_RTT_WriteString(0, "FreeModbus resume failed!\r\n");
 
 		// 唤醒后 UART 电平稳定延时 (深度睡眠后调度器未恢复, 用 nop)
 		for (int i = 0; i < 1000000; ++i) __asm__ volatile("nop");

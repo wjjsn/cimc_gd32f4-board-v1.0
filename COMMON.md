@@ -21,10 +21,12 @@
 | `common/Protocol/` | 协议帧解析与应答构建 | **APP 版**（header-only：`ProtocolParser`/`ProtocolStatus`/`ProtocolFrame`/`ResponseBuilder`） |
 | `common/CherryRB/` | 环形缓冲区库 | **APP 版**（`chry_ringbuffer.hpp` 用 `static inline`） |
 | `common/template_schedule/` | 任务调度模板 | APP 独有，移动共享 |
+| `common/freemodbus/` | FreeModbus 1.6.0 上游源码 | Git 子模块，固定到标签 `1.6.0` |
+| `common/FreeModbus/` | FreeModbus Meson 接入与 GD32F4 移植层 | APP 使用；USART0(PA9/PA10) + TIMER6 |
 
 软链清单（相对路径，仓库可移植）：
 
-- `APP/`：`arm-none-eabi.ini`、`meson_options.txt`、`SEGGER_RTT`、`CherryRB`、`template_schedule`、`Protocol` → `../common/...`；`Driver/HAL`、`Driver/Hardware`、`Driver/{serial_send,hardware,device_init}.hpp`、`Driver/flash_param.hpp`→`../../common/Function/...`、`Function/{hardware,params,flash_param}.hpp` → `../../common/...`
+- `APP/`：`arm-none-eabi.ini`、`meson_options.txt`、`SEGGER_RTT`、`CherryRB`、`template_schedule`、`Protocol`、`FreeModbus` → `../common/...`；`Driver/HAL`、`Driver/Hardware`、`Driver/{serial_send,hardware,device_init}.hpp`、`Driver/flash_param.hpp`→`../../common/Function/...`、`Function/{hardware,params,flash_param}.hpp` → `../../common/...`
 - `BootLoader/`：同 APP 侧结构
 
 > 注：`dac_driver.hpp` 并入 HAL 目录后，`Driver/` 位置不再有软链，通过 HAL 依赖的 include 目录（`-IDriver/HAL`）以 `#include "dac_driver.hpp"` 解析。

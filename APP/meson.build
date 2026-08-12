@@ -13,6 +13,7 @@ subdir('CherryRB')
 subdir('Driver'/'Hardware')
 subdir('SEGGER_RTT')
 subdir('template_schedule')
+subdir('FreeModbus')
 
 dependencies = [
   dependency('HAL'),
@@ -20,7 +21,8 @@ dependencies = [
   dependency('CherryRB'),
   dependency('Hardware'),
   dependency('SEGGER_RTT'),
-  dependency('template_schedule')
+  dependency('template_schedule'),
+  dependency('FreeModbus'),
 ]
 
 lds = meson.current_source_dir()/'app_flash.ld'

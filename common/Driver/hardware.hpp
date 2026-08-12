@@ -3,6 +3,7 @@
 #include "hal.hpp"
 #include "gd30ad3340.hpp"
 #include "OLED/ssd1306/0.91.hpp"
+#include "../FreeModbus/modbus_config.hpp"
 using system_status_led = HAL::gd32f4::GPIO<
 	HAL::gd32f4::registers::GPIOE_ADDR, GPIO_PIN_3, GPIO_MODE_OUTPUT,
 	GPIO_PUPD_PULLDOWN,
@@ -126,3 +127,39 @@ using CS_485 = HAL::gd32f4::GPIO<
 	HAL::gd32f4::registers::GPIOA_ADDR, GPIO_PIN_1, GPIO_MODE_OUTPUT,
 	GPIO_PUPD_PULLDOWN,
 	HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_2MHZ, SET> >;
+
+// FreeModbus 独立串口: USART0 TX=PA9, RX=PA10
+constexpr uint32_t MODBUS_USART0_ADDR =
+	HAL::gd32f4::registers::USART0_ADDR;
+constexpr uint32_t MODBUS_TIMER_ADDR =
+	HAL::gd32f4::registers::TIMER6_ADDR;
+
+inline constexpr uint32_t MODBUS_USART_PARITY =
+	ModbusConfig::parity == ModbusSerialParity::even ? USART_PM_EVEN :
+	ModbusConfig::parity == ModbusSerialParity::odd  ? USART_PM_ODD :
+							   USART_PM_NONE;
+inline constexpr uint32_t MODBUS_USART_WORD_LENGTH =
+	ModbusConfig::mode == ModbusSerialMode::ascii ? USART_WL_8BIT :
+	ModbusConfig::parity == ModbusSerialParity::none ? USART_WL_8BIT :
+							    USART_WL_9BIT;
+
+using MODBUS_USART0_TX = HAL::gd32f4::GPIO<
+	HAL::gd32f4::registers::GPIOA_ADDR, GPIO_PIN_9, GPIO_MODE_AF,
+	GPIO_PUPD_PULLUP, HAL::gd32f4::AFConfig<GPIO_AF_7> >;
+using MODBUS_USART0_RX = HAL::gd32f4::GPIO<
+	HAL::gd32f4::registers::GPIOA_ADDR, GPIO_PIN_10, GPIO_MODE_AF,
+	GPIO_PUPD_PULLUP, HAL::gd32f4::AFConfig<GPIO_AF_7> >;
+using MODBUS_USART0 = HAL::gd32f4::USART_Device<
+	MODBUS_USART0_TX, MODBUS_USART0_RX,
+	MODBUS_USART0_ADDR, ModbusConfig::baudrate, MODBUS_USART_PARITY,
+	MODBUS_USART_WORD_LENGTH, USART_STB_1BIT>;
+
+// TIMER6 是无 GPIO 通道的基础定时器，专用于 Modbus RTU 帧间隔。
+using MODBUS_TIMER = HAL::gd32f4::TIM<
+	MODBUS_TIMER_ADDR, ModbusConfig::timer_clock_hz, RCU_TIMER_PSC_MUL2>;
+
+struct MODBUS_DIRECTION {
+	static void init() {}
+	static void receive() {}
+	static void transmit() {}
+};

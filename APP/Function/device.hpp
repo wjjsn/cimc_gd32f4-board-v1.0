@@ -9,6 +9,8 @@
 #include "../Protocol/protocol_parser.hpp"
 #include "../Driver/serial_send.hpp"
 #include "SEGGER_RTT.h"
+#include "modbus_app.hpp"
+#include <cmath>
 
 extern Screen g_screen;
 
@@ -29,6 +31,10 @@ template <typename RingBuffer> class Device {
 	bool is_sampling_ = false;
 	bool sleeping_ = false;
 	bool heartbeat_sent_ = false;
+	uint16_t dac_raw_ = 0;
+	float latest_ch0_ = 0.0f;
+	float latest_ch1_ = 0.0f;
+	float latest_ch2_ = 0.0f;
 
 	// 命令处理器 — init() 中 placement new 构造, 无动态内存
 	CommandHandler *cmd_handler_ = nullptr;
@@ -52,7 +58,7 @@ template <typename RingBuffer> class Device {
 		cmd_handler_ = new (cmd_handler_storage_) CommandHandler(
 			params_, alarms_, oled_status_,
 			auto_report_active_, auto_report_next_,
-			auto_report_interval_ms_, is_sampling_, sleeping_);
+			auto_report_interval_ms_, is_sampling_, sleeping_, dac_raw_);
 
 		// if ( //Power reset generated
 		// 	RESET != rcu_flag_get(RCU_FLAG_PORRST) ||
@@ -101,8 +107,10 @@ template <typename RingBuffer> class Device {
 
 	void alarm_scan()
 	{
-		float ch0 = read_ch0() * params_.ch0_ratio;
-		float ch1 = read_ch1() * params_.ch1_ratio;
+		latest_ch0_ = read_ch0() * params_.ch0_ratio;
+		latest_ch1_ = read_ch1() * params_.ch1_ratio;
+		float ch0 = latest_ch0_;
+		float ch1 = latest_ch1_;
 		float thr0 = params_.ch0_threshold;
 		float thr1 = params_.ch1_threshold;
 		uint32_t utc = rtc_to_utc();
@@ -154,8 +162,10 @@ template <typename RingBuffer> class Device {
 			auto_report_next_ = systick_ms + auto_report_interval_ms_;
 
 			uint32_t utc = rtc_to_utc();
-			float ch0 = read_ch0() * params_.ch0_ratio;
-			float ch1 = read_ch1() * params_.ch1_ratio;
+			latest_ch0_ = read_ch0() * params_.ch0_ratio;
+			latest_ch1_ = read_ch1() * params_.ch1_ratio;
+			float ch0 = latest_ch0_;
+			float ch1 = latest_ch1_;
 			uint8_t buf[12];
 			buf[0] = (utc >> 24) & 0xFF;
 			buf[1] = (utc >> 16) & 0xFF;
@@ -204,6 +214,141 @@ template <typename RingBuffer> class Device {
 	void sleep_tick(uint32_t systick_ms)
 	{
 		if (cmd_handler_) cmd_handler_->sleep_tick(systick_ms);
+	}
+
+	void modbus_get_snapshot(ModbusAppSnapshot &snapshot)
+	{
+		/*
+		 * Modbus回调只读这份快照，不直接碰慢速I2C ADC。这样主站读寄存器时不会因为
+		 * 某个外设等待而卡住整个协议栈。新增只读业务字段时在这里填当前缓存值。
+		 */
+		snapshot.ch0 = latest_ch0_;
+		snapshot.ch1 = latest_ch1_;
+		snapshot.ch2 = latest_ch2_;
+		snapshot.utc = rtc_to_utc();
+		snapshot.device_id = params_.device_id;
+		snapshot.legacy_baudrate_code = params_.baudrate_code;
+		snapshot.ch0_ratio = params_.ch0_ratio;
+		snapshot.ch1_ratio = params_.ch1_ratio;
+		snapshot.ch0_threshold = params_.ch0_threshold;
+		snapshot.ch1_threshold = params_.ch1_threshold;
+		snapshot.ch2_threshold = params_.ch2_threshold;
+		snapshot.report_interval = params_.report_interval;
+		snapshot.alarm_mode = params_.alarm_mode;
+		snapshot.dac_raw = dac_raw_;
+		snapshot.alarm_count = static_cast<uint16_t>(alarms_.record_count_);
+		snapshot.ch0_alarm = ch0_alarm_active_;
+		snapshot.ch1_alarm = ch1_alarm_active_;
+		snapshot.auto_report = auto_report_active_;
+		snapshot.sleeping = sleeping_;
+		snapshot.work_led = work_status_led::read();
+	}
+
+	bool modbus_apply_snapshot(const ModbusAppSnapshot &snapshot,
+				   uint32_t changes)
+	{
+		/*
+		 * 先把整次请求全部校验完，再真正修改设备，避免FC16前半段已经生效、后半段却
+		 * 因非法值失败。返回false会让Modbus主站收到非法数据值异常（通常是异常码03）。
+		 */
+		if ((changes & MODBUS_CHANGE_DEVICE_ID) &&
+		    (snapshot.device_id == 0U || snapshot.device_id == 0xFFFFU))
+			return false;
+		// 这是旧协议USART1的波特率代码，不是FreeModbus USART0的19200配置。
+		if ((changes & MODBUS_CHANGE_LEGACY_BAUDRATE) &&
+		    (snapshot.legacy_baudrate_code < 0x11U ||
+		     snapshot.legacy_baudrate_code > 0x14U))
+			return false;
+		// NaN/Inf写进参数后会让比较和告警逻辑失去意义，因此统一拒绝。
+		if ((changes & (MODBUS_CHANGE_CH0_RATIO | MODBUS_CHANGE_CH1_RATIO |
+				MODBUS_CHANGE_CH0_THRESHOLD | MODBUS_CHANGE_CH1_THRESHOLD |
+				MODBUS_CHANGE_CH2_THRESHOLD)) &&
+		    (!std::isfinite(snapshot.ch0_ratio) ||
+		     !std::isfinite(snapshot.ch1_ratio) ||
+		     !std::isfinite(snapshot.ch0_threshold) ||
+		     !std::isfinite(snapshot.ch1_threshold) ||
+		     !std::isfinite(snapshot.ch2_threshold)))
+			return false;
+		if ((changes & MODBUS_CHANGE_REPORT_INTERVAL) &&
+		    (snapshot.report_interval < 1U || snapshot.report_interval > 3U))
+			return false;
+		if ((changes & MODBUS_CHANGE_ALARM_MODE) &&
+		    snapshot.alarm_mode != 1U && snapshot.alarm_mode != 2U)
+			return false;
+		if ((changes & MODBUS_CHANGE_DAC) && snapshot.dac_raw > 4095U)
+			return false;
+
+		if (changes & MODBUS_CHANGE_DEVICE_ID)
+			params_.device_id = snapshot.device_id;
+		if (changes & MODBUS_CHANGE_LEGACY_BAUDRATE)
+			params_.baudrate_code = snapshot.legacy_baudrate_code;
+		if (changes & MODBUS_CHANGE_CH0_RATIO)
+			params_.ch0_ratio = snapshot.ch0_ratio;
+		if (changes & MODBUS_CHANGE_CH1_RATIO)
+			params_.ch1_ratio = snapshot.ch1_ratio;
+		if (changes & MODBUS_CHANGE_CH0_THRESHOLD)
+			params_.ch0_threshold = snapshot.ch0_threshold;
+		if (changes & MODBUS_CHANGE_CH1_THRESHOLD)
+			params_.ch1_threshold = snapshot.ch1_threshold;
+		if (changes & MODBUS_CHANGE_CH2_THRESHOLD)
+			params_.ch2_threshold = snapshot.ch2_threshold;
+		if (changes & MODBUS_CHANGE_REPORT_INTERVAL) {
+			params_.report_interval = snapshot.report_interval;
+			auto_report_interval_ms_ =
+				snapshot.report_interval == 1U ? 1000U :
+				snapshot.report_interval == 2U ? 3000U : 5000U;
+		}
+		if (changes & MODBUS_CHANGE_ALARM_MODE) {
+			params_.alarm_mode = snapshot.alarm_mode;
+			alarms_.active_ = snapshot.alarm_mode == 1U;
+		}
+		if (changes & MODBUS_CHANGE_DAC) {
+			// DAC写入立即作用。当前dac_raw_不在DeviceParams中，因此这里不单独持久化。
+			dac_raw_ = snapshot.dac_raw;
+			DAC0::set(dac_raw_);
+			DAC0::trigger();
+		}
+
+		// 除DAC外，现有保持寄存器参数都属于DeviceParams，统一保存到外部Flash。
+		if (changes & ~MODBUS_CHANGE_DAC)
+			params_save();
+		if (changes & MODBUS_CHANGE_LEGACY_BAUDRATE) {
+			usart_baudrate_set(HAL::gd32f4::registers::USART1_ADDR,
+					   baudrate_code_to_hz(params_.baudrate_code));
+			usart_enable(HAL::gd32f4::registers::USART1_ADDR);
+		}
+		return true;
+	}
+
+	void modbus_set_auto_report(bool enabled)
+	{
+		// 00001是运行控制，不写入Flash；重启后按默认运行状态重新开始。
+		auto_report_active_ = enabled;
+		is_sampling_ = enabled;
+		oled_status_ = enabled ? OLEDStatus::AUTO_SAMPLE : OLEDStatus::IDLE;
+		if (enabled) {
+			auto_report_next_ = 0;
+			work_status_led::set();
+		} else {
+			work_status_led::clear();
+		}
+	}
+
+	void modbus_set_alarm_report(bool enabled)
+	{
+		// 00002同时改变持久化alarm_mode，所以这里立即保存参数。
+		params_.alarm_mode = enabled ? 1U : 2U;
+		alarms_.active_ = enabled;
+		params_save();
+	}
+
+	void modbus_set_work_led(bool enabled)
+	{
+		// 00003只控制当前GPIO状态，不保存。
+		if (enabled)
+			work_status_led::set();
+		else
+			work_status_led::clear();
 	}
 
     private:

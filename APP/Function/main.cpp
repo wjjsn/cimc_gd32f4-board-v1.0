@@ -3,6 +3,13 @@
 #include "chry_ringbuffer.hpp"
 #include "SEGGER_RTT.h"
 #include "schedule.hpp"
+#include "modbus_app.hpp"
+#include "modbus_config.hpp"
+#include "modbus_slave.hpp"
+
+extern "C" {
+#include "mb.h"
+}
 
 // 设备核心对象
 #include "device.hpp"
@@ -23,6 +30,32 @@ Screen g_screen;
 
 // ===================== 全局设备对象 =====================
 Device<Uart1RB> g_device;
+
+void modbus_app_get_snapshot(ModbusAppSnapshot &snapshot)
+{
+	g_device.modbus_get_snapshot(snapshot);
+}
+
+bool modbus_app_apply_snapshot(const ModbusAppSnapshot &snapshot,
+			       uint32_t changes)
+{
+	return g_device.modbus_apply_snapshot(snapshot, changes);
+}
+
+void modbus_app_set_auto_report(bool enabled)
+{
+	g_device.modbus_set_auto_report(enabled);
+}
+
+void modbus_app_set_alarm_report(bool enabled)
+{
+	g_device.modbus_set_alarm_report(enabled);
+}
+
+void modbus_app_set_work_led(bool enabled)
+{
+	g_device.modbus_set_work_led(enabled);
+}
 
 // ===================== SysTick =====================
 static volatile uint32_t systick_tick_ms = 0;
@@ -70,10 +103,20 @@ int main(void)
 	Uart1RB::init();
 
 	// 使能串口中断接收
-	USART1::enable_it(0, 0);
+	USART1::enable_it(2, 0);
 
 	// 初始化设备对象 (参数加载 + 协议 + 告警 + OLED)
 	g_device.init();
+
+	if (!modbus_slave_init()) {
+		SEGGER_RTT_WriteString(0, "FreeModbus init failed!\r\n");
+		while (1)
+			__asm volatile("BKPT #0");
+	}
+	SEGGER_RTT_WriteString(
+		0, ModbusConfig::mode == ModbusSerialMode::ascii ?
+			   "FreeModbus ASCII ready\r\n" :
+			   "FreeModbus RTU ready\r\n");
 
 	if (SysTick_Config(SystemCoreClock / 1000U)) {
 		while (1) {
@@ -81,8 +124,9 @@ int main(void)
 			__asm volatile("BKPT #0");
 		}
 	}
-	NVIC_SetPriority(SysTick_IRQn, 0x00U);
+	NVIC_SetPriority(SysTick_IRQn, 3U);
 	while (1) {
+		modbus_slave_poll();
 		Scheduler::poll();
 	}
 }
