@@ -1,7 +1,7 @@
 #pragma once
 
 #include "hal.hpp"
-#include "gd30ad3340.hpp"
+#include "gd30ad3344.hpp"
 #include "OLED/ssd1306/0.91.hpp"
 #include "../FreeModbus/modbus_config.hpp"
 using system_status_led = HAL::gd32f4::GPIO<
@@ -70,11 +70,6 @@ using I2C0_BUS = HAL::gd32f4::I2C_bus<I2C0_SDA, I2C0_SCL,
 				      HAL::gd32f4::registers::I2C0_ADDR,
 				      400000>; // 400kHz 快速模式
 
-// ========== GD30AD3340 设备 ==========
-// 7-bit 地址 0x48 → 8-bit 写入地址 0x90 (ADDR 接 GND)
-using ADC_I2C = HAL::gd32f4::I2C_device_addr<I2C0_BUS, 0x90>;
-using gd30ad3340_on_i2c0 = GD30AD3340<ADC_I2C>;
-
 #define OLED_ADDRESS 0x78
 using OLED_I2C = HAL::gd32f4::I2C_device_addr<I2C0_BUS, OLED_ADDRESS>;
 using Screen = OLED<OLED_I2C>;
@@ -109,6 +104,16 @@ using SPI1_NSS_GPIO = HAL::gd32f4::GPIO<
 	HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, SET> >;
 
 using SPI1_FLASH = HAL::gd32f4::SPI_device<SPI1_BUS, SPI1_NSS_GPIO>;
+
+using SPI1_ADC_CS = HAL::gd32f4::GPIO<
+	HAL::gd32f4::registers::GPIOD_ADDR, GPIO_PIN_8, GPIO_MODE_OUTPUT,
+	GPIO_PUPD_PULLUP,
+	HAL::gd32f4::OutputConfig<GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, SET> >;
+
+using SPI1_ADC = HAL::gd32f4::SPI_device<SPI1_BUS, SPI1_ADC_CS>;
+using ADC_DELAY =
+	HAL::gd32f4::SysTick_Delay<HAL::gd32f4::registers::TIMER5_ADDR>;
+using gd30ad3344_on_spi1 = GD30AD3344<SPI1_ADC, ADC_DELAY>;
 
 using USART1_TX = HAL::gd32f4::GPIO<HAL::gd32f4::registers::GPIOA_ADDR,
 				    GPIO_PIN_2, GPIO_MODE_AF, GPIO_PUPD_PULLUP,

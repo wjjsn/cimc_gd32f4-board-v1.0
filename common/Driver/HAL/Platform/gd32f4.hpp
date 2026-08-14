@@ -1059,7 +1059,7 @@ template <uint32_t TIMx> struct SysTick_Delay {
 		rcu_periph_clock_enable(RCU_periph<TIMx>::periph);
 		uint32_t clk_freq = rcu_clock_freq_get(CK_APB1);
 		timer_parameter_struct timer_param = {
-			(clk_freq / 10000000) - 1, // prescaler: 100ns resolution
+			static_cast<uint16_t>((clk_freq / 10000000) - 1), // prescaler: 100ns resolution
 			TIMER_COUNTER_EDGE,
 			TIMER_COUNTER_UP,
 			TIMER_CKDIV_DIV1,

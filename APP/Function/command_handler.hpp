@@ -14,7 +14,7 @@
 #include <ctime>
 extern "C" void SystemInit();
 // 外部全局外设 (定义在 main.cpp)
-extern gd30ad3340_on_i2c0 g_adc;
+extern gd30ad3344_on_spi1 g_adc;
 
 // ======================== OLED 状态枚举 ========================
 enum class OLEDStatus : uint8_t {

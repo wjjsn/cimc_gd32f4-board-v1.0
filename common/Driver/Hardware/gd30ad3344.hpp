@@ -1,257 +1,147 @@
 #pragma once
 
 #include <cstdint>
-#include "bits_operation.hpp"
 
-template <typename spi_device> class GD30AD3344 {
-	std::uint16_t config_register;
+template <typename SPI_Device, typename Delay> class GD30AD3344 {
+	std::uint16_t config_register_ = 0;
+
+	std::int16_t transfer_config()
+	{
+		std::uint8_t data[2] = {
+			static_cast<std::uint8_t>(config_register_ >> 8),
+			static_cast<std::uint8_t>(config_register_ & 0xFF)
+		};
+		SPI_Device::transfer(data, 2);
+		const std::uint16_t raw =
+			(static_cast<std::uint16_t>(data[0]) << 8) | data[1];
+		return static_cast<std::int16_t>(raw);
+	}
 
     public:
-	enum MUX_options_t {
-		INP_IN0_INN_IN1,
-		INP_IN0_INN_IN3,
-		INP_IN1_INN_IN3,
-		INP_IN2_INN_IN3,
-		INP_IN0_INN_GND,
-		INP_IN1_INN_GND,
-		INP_IN2_INN_GND,
-		INP_IN3_INN_GND
+	enum MUX_options_t : std::uint8_t {
+		INP_IN0_INN_IN1 = 0b000,
+		INP_IN0_INN_IN3 = 0b001,
+		INP_IN1_INN_IN3 = 0b010,
+		INP_IN2_INN_IN3 = 0b011,
+		INP_IN0_INN_GND = 0b100,
+		INP_IN1_INN_GND = 0b101,
+		INP_IN2_INN_GND = 0b110,
+		INP_IN3_INN_GND = 0b111
 	};
 
-	enum PGA_options_t {
-		_6144V1,
-		_4096V1,
-		_2048,
-		_1024,
-		_0512,
-		_0256,
-		_0064
+	enum PGA_options_t : std::uint8_t {
+		_6144V1 = 0b000,
+		_4096V1 = 0b001,
+		_2048 = 0b010,
+		_1024 = 0b011,
+		_0512 = 0b100,
+		_0256 = 0b101,
+		_0064 = 0b110
 	};
 
-	enum work_mode_options_t { CONTINUE_MODE, SINGLE_MODE };
-
-	enum data_rate_options_t {
-		SPS6_25,
-		SPS12_5,
-		SPS25,
-		SPS50,
-		SPS100,
-		SPS250,
-		SPS500,
-		SPS1000
+	enum work_mode_options_t : std::uint8_t {
+		CONTINUE_MODE = 0,
+		SINGLE_MODE = 1
 	};
 
-	enum MISO_PULLUP_options_t { PULLUP_ENABLE, PULLUP_DISABLE };
+	enum data_rate_options_t : std::uint8_t {
+		SPS6_25 = 0b000,
+		SPS12_5 = 0b001,
+		SPS25 = 0b010,
+		SPS50 = 0b011,
+		SPS100 = 0b100,
+		SPS250 = 0b101,
+		SPS500 = 0b110,
+		SPS1000 = 0b111
+	};
+
+	enum MISO_PULLUP_options_t : std::uint8_t {
+		PULLUP_ENABLE,
+		PULLUP_DISABLE
+	};
 
 	void init(MUX_options_t mux_option = INP_IN1_INN_GND,
-		  PGA_options_t pga_option = _4096V1,
+		  PGA_options_t pga_option = _2048,
 		  work_mode_options_t work_mode_option = SINGLE_MODE,
 		  data_rate_options_t data_rate_option = SPS100,
-		  MISO_PULLUP_options_t MISO_PULLUP_option = PULLUP_ENABLE)
+		  MISO_PULLUP_options_t pullup_option = PULLUP_ENABLE)
 	{
+		SPI_Device::init();
+		Delay::init();
+		config_register_ = 0;
 		config_MUX(mux_option);
 		config_PGA(pga_option);
 		config_work_mode(work_mode_option);
 		config_data_rate(data_rate_option);
-		config_MISO_PULLUP(MISO_PULLUP_option);
+		config_MISO_PULLUP(pullup_option);
 		write_config_register();
 	}
 
 	void start_single_conversion()
 	{
-		SET_BIT(config_register, 15);
+		config_register_ |= std::uint16_t{ 1 } << 15;
 		write_config_register();
 	}
 
-	std::int16_t read_conversion_data(void)
+	std::int16_t read_raw()
 	{
-		std::int16_t data;
-		spi_device::receive((std::uint8_t *)&data, 2);
-		return data;
+		start_single_conversion();
+		Delay::delay_1ms(11);
+		return transfer_config();
 	}
 
-	void config_MUX(MUX_options_t mux_option)
+	std::int16_t read_conversion_data()
 	{
-		switch (mux_option) // 14:12
-		{
-		case INP_IN0_INN_IN1: // 000
-			CLR_BIT(config_register, 12);
-			CLR_BIT(config_register, 13);
-			CLR_BIT(config_register, 14);
-			break;
-		case INP_IN0_INN_IN3: // 001
-			SET_BIT(config_register, 12);
-			CLR_BIT(config_register, 13);
-			CLR_BIT(config_register, 14);
-			break;
-		case INP_IN1_INN_IN3: // 010
-			CLR_BIT(config_register, 12);
-			SET_BIT(config_register, 13);
-			CLR_BIT(config_register, 14);
-			break;
-		case INP_IN2_INN_IN3: // 011
-			SET_BIT(config_register, 12);
-			SET_BIT(config_register, 13);
-			CLR_BIT(config_register, 14);
-			break;
-		case INP_IN0_INN_GND: // 100
-			CLR_BIT(config_register, 12);
-			CLR_BIT(config_register, 13);
-			SET_BIT(config_register, 14);
-			break;
-		case INP_IN1_INN_GND: // 101
-			SET_BIT(config_register, 12);
-			CLR_BIT(config_register, 13);
-			SET_BIT(config_register, 14);
-			break;
-		case INP_IN2_INN_GND: // 110
-			SET_BIT(config_register, 12);
-			SET_BIT(config_register, 13);
-			CLR_BIT(config_register, 14);
-			break;
-		case INP_IN3_INN_GND: // 111
-			SET_BIT(config_register, 12);
-			SET_BIT(config_register, 13);
-			SET_BIT(config_register, 14);
-			break;
-		default:
-			break;
-		}
+		return transfer_config();
 	}
 
-	void config_PGA(PGA_options_t pga_option)
+	void config_MUX(MUX_options_t option)
 	{
-		switch (pga_option) // 11:9
-		{
-		case _6144V1: // 000
-			CLR_BIT(config_register, 9);
-			CLR_BIT(config_register, 10);
-			CLR_BIT(config_register, 11);
-			break;
-		case _4096V1: // 001
-			SET_BIT(config_register, 9);
-			CLR_BIT(config_register, 10);
-			CLR_BIT(config_register, 11);
-			break;
-		case _2048: // 010
-			CLR_BIT(config_register, 9);
-			SET_BIT(config_register, 10);
-			CLR_BIT(config_register, 11);
-			break;
-		case _1024: // 011
-			SET_BIT(config_register, 9);
-			SET_BIT(config_register, 10);
-			CLR_BIT(config_register, 11);
-			break;
-		case _0512: // 100
-			CLR_BIT(config_register, 9);
-			CLR_BIT(config_register, 10);
-			SET_BIT(config_register, 11);
-			break;
-		case _0256: // 101
-			SET_BIT(config_register, 9);
-			CLR_BIT(config_register, 10);
-			SET_BIT(config_register, 11);
-			break;
-		case _0064: // 110
-			CLR_BIT(config_register, 9);
-			SET_BIT(config_register, 10);
-			SET_BIT(config_register, 11);
-			break;
-		default:
-			break;
-		}
+		config_register_ &= ~(std::uint16_t{ 0b111 } << 12);
+		config_register_ |= static_cast<std::uint16_t>(option) << 12;
 	}
 
-	void config_work_mode(work_mode_options_t work_mode_option)
+	void config_PGA(PGA_options_t option)
 	{
-		switch (work_mode_option) // 8
-		{
-		case CONTINUE_MODE:
-			CLR_BIT(config_register, 8);
-			break;
-		case SINGLE_MODE:
-			SET_BIT(config_register, 8);
-			break;
-		default:
-			break;
-		}
+		config_register_ &= ~(std::uint16_t{ 0b111 } << 9);
+		config_register_ |= static_cast<std::uint16_t>(option) << 9;
 	}
 
-	void config_data_rate(data_rate_options_t data_rate_option)
+	void config_work_mode(work_mode_options_t option)
 	{
-		switch (data_rate_option) // 7:5
-		{
-		case SPS6_25: // 000
-			CLR_BIT(config_register, 5);
-			CLR_BIT(config_register, 6);
-			CLR_BIT(config_register, 7);
-			break;
-		case SPS12_5: // 001
-			SET_BIT(config_register, 5);
-			CLR_BIT(config_register, 6);
-			CLR_BIT(config_register, 7);
-			break;
-		case SPS25: // 010
-			CLR_BIT(config_register, 5);
-			SET_BIT(config_register, 6);
-			CLR_BIT(config_register, 7);
-			break;
-		case SPS50: // 011
-			SET_BIT(config_register, 5);
-			SET_BIT(config_register, 6);
-			CLR_BIT(config_register, 7);
-			break;
-		case SPS100: // 100
-			CLR_BIT(config_register, 5);
-			CLR_BIT(config_register, 6);
-			SET_BIT(config_register, 7);
-			break;
-		case SPS250: // 101
-			SET_BIT(config_register, 5);
-			CLR_BIT(config_register, 6);
-			SET_BIT(config_register, 7);
-			break;
-		case SPS500: // 110
-			CLR_BIT(config_register, 5);
-			SET_BIT(config_register, 6);
-			SET_BIT(config_register, 7);
-			break;
-		case SPS1000: // 111
-			SET_BIT(config_register, 5);
-			SET_BIT(config_register, 6);
-			SET_BIT(config_register, 7);
-			break;
-		default:
-			break;
-		}
+		config_register_ &= ~(std::uint16_t{ 1 } << 8);
+		config_register_ |= static_cast<std::uint16_t>(option) << 8;
 	}
 
-	void config_MISO_PULLUP(MISO_PULLUP_options_t MISO_PULLUP_option)
+	void config_data_rate(data_rate_options_t option)
 	{
-		switch (MISO_PULLUP_option) {
-		case PULLUP_ENABLE:
-			SET_BIT(config_register, 3);
-			break;
-		case PULLUP_DISABLE:
-			CLR_BIT(config_register, 3);
-			break;
-		default:
-			break;
-		}
+		config_register_ &= ~(std::uint16_t{ 0b111 } << 5);
+		config_register_ |= static_cast<std::uint16_t>(option) << 5;
 	}
 
-	void read_config_register(void)
+	void config_MISO_PULLUP(MISO_PULLUP_options_t option)
 	{
-		uint8_t read_data[4] = { 0 };
-		spi_device::receive(read_data, 4);
-		config_register = read_data[2] << 8 | read_data[3];
+		config_register_ &= ~(std::uint16_t{ 1 } << 3);
+		if (option == PULLUP_ENABLE)
+			config_register_ |= std::uint16_t{ 1 } << 3;
 	}
 
-	void write_config_register(void)
+	std::uint16_t read_config_register()
 	{
-		this->config_register |= 1 << 1;
-		this->config_register &= ~(1 << 2);
-		spi_device::transmit((std::uint8_t *)&config_register, 2);
+		std::uint8_t data[4] = {
+			static_cast<std::uint8_t>(config_register_ >> 8),
+			static_cast<std::uint8_t>(config_register_ & 0xFF),
+			static_cast<std::uint8_t>(config_register_ >> 8),
+			static_cast<std::uint8_t>(config_register_ & 0xFF)
+		};
+		SPI_Device::transfer(data, 4);
+		return (static_cast<std::uint16_t>(data[2]) << 8) | data[3];
+	}
+
+	void write_config_register()
+	{
+		config_register_ |= std::uint16_t{ 1 } << 1;
+		config_register_ &= ~(std::uint16_t{ 1 } << 2);
+		(void)transfer_config();
 	}
 };

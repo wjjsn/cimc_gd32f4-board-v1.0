@@ -5,7 +5,7 @@
 #include "serial_send.hpp"
 
 // 前向声明 (实例定义在各工程 main.cpp)
-extern gd30ad3340_on_i2c0 g_adc;
+extern gd30ad3344_on_spi1 g_adc;
 extern Screen g_screen;
 
 /// 初始化所有外设, 注意: GPIO 引脚由模板构造时自动初始化
@@ -32,6 +32,9 @@ inline void device_init_all()
 
 	// SPI Flash (预留)
 	SPI1_FLASH::init();
+
+	// SPI ADC: GD30AD3344, CS=PD8, 内置参考源
+	g_adc.init();
 
 	// USART1 + RS485
 	USART1::init();

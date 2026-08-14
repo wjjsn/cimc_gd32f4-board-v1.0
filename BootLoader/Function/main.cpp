@@ -82,7 +82,7 @@ using uart1_buffer = Cherry_RingBuffer<&ctx_uart1_buffer, 8192>;
 ProtocolParser<uart1_buffer> g_proto;
 
 // ===================== 全局外设实例 =====================
-gd30ad3340_on_i2c0 g_adc;
+gd30ad3344_on_spi1 g_adc;
 Screen g_screen;
 
 // ===================== 设备参数 =====================
