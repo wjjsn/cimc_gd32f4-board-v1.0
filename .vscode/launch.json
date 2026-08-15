@@ -28,7 +28,7 @@
             "servertype": "external",
             "gdbTarget": "127.0.0.1:50000",
             "liveWatch": {
-                "enabled": false,
+                "enabled": true,
                 "samplesPerSecond": 4
             },
             "postLaunchCommands": [

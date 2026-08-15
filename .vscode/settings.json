@@ -1,3 +1,10 @@
 {
+    "clangd.path": "/usr/bin/clangd",
+    "clangd.checkUpdates": false,
+    "clangd.serverCompletionRanking": true,
+    "clangd.arguments": [
+        "--query-driver=/usr/bin/arm-none-eabi-*",
+        "--background-index"
+    ],
     "cortex-debug.armToolchainPath": "/usr/bin"
 }
