@@ -2,13 +2,22 @@
 #include "button.hpp"
 #include "hardware.hpp"
 #include "SEGGER_RTT.h"
+#include "chry_ringbuffer.hpp"
+#include "device.hpp"
+extern chry_ringbuffer_t ctx_uart1_buffer;
+using Uart1RB = Cherry_RingBuffer<&ctx_uart1_buffer, 128>;
+extern Device<Uart1RB> g_device;
 
 inline void enter_factory_mode(){
+	g_device.params_.use_factory_mode=true;
+	g_device.params_save();
 	SEGGER_RTT_WriteString(0, "enter_factory_mode OK\r\n");
 }
 
 inline void enter_normal_mode()
 {
+	g_device.params_.use_factory_mode = false;
+	g_device.params_save();
 	SEGGER_RTT_WriteString(0, "enter_normal_mode OK\r\n");
 }
 

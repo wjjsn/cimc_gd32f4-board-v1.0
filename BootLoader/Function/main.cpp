@@ -100,6 +100,7 @@ static void params_set_defaults()
 	g_params.ch0_threshold = 100.0f;
 	g_params.ch1_threshold = 100.0f;
 	g_params.ch2_threshold = 100.0f;
+	g_params.use_factory_mode = false;
 	g_params.alarm_mode = 0x02; // 不主动上报
 	g_params.report_interval = 0x01; // 1s
 	g_params.reserved1[0] = 0;

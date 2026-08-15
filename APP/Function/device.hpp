@@ -350,6 +350,15 @@ template <typename RingBuffer> class Device {
 		else
 			work_status_led::clear();
 	}
+	void params_save()
+	{
+		params_.crc32 = params_crc32_calc(
+			reinterpret_cast<const uint8_t *>(&params_),
+			sizeof(DeviceParams) - 4);
+		FlashParam::save(params_);
+		// 恢复告警数据 (params_save 擦除了整个扇区)
+		alarms_.save_to_flash();
+	}
 
     private:
 	void params_set_defaults()
@@ -360,17 +369,12 @@ template <typename RingBuffer> class Device {
 		params_.reserved0 = 0;
 		params_.ch0_ratio = 1.0f; params_.ch1_ratio = 1.0f;
 		params_.ch0_threshold = 100.0f; params_.ch1_threshold = 100.0f; params_.ch2_threshold = 100.0f;
+		params_.use_factory_mode = true;
 		params_.alarm_mode = 0x02; params_.report_interval = 0x01;
 		params_.reserved1[0] = 0; params_.reserved1[1] = 0;
 		params_.crc32 = 0;
 	}
-	void params_save()
-	{
-		params_.crc32 = params_crc32_calc(reinterpret_cast<const uint8_t*>(&params_), sizeof(DeviceParams) - 4);
-		FlashParam::save(params_);
-		// 恢复告警数据 (params_save 擦除了整个扇区)
-		alarms_.save_to_flash();
-	}
+
 	void load_params()
 	{
 		FlashParam::load(params_);

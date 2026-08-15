@@ -16,6 +16,7 @@ struct __attribute__((aligned(4))) DeviceParams {
 	float ch0_threshold; // CH0 阈值, 默认 100.0
 	float ch1_threshold; // CH1 阈值, 默认 100.0
 	float ch2_threshold; // CH2 阈值, 默认 100.0
+	bool use_factory_mode;
 	uint8_t alarm_mode; // 01=主动上报, 02=不主动上报
 	uint8_t report_interval; // 01=1s, 02=3s, 03=5s
 	uint8_t reserved1[2];
