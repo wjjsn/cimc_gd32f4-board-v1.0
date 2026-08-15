@@ -88,7 +88,15 @@ bool pop_rx_event(RxEvent &event)
 	return true;
 }
 
-
+void clear_usart_rx_status()
+{
+	// GD32要求按“读STAT0再读DATA”的顺序清IDLE及部分接收状态，随后清错误位。
+	(void)USART_STAT0(MODBUS_USART0_ADDR);
+	(void)USART_DATA(MODBUS_USART0_ADDR);
+	USART_STAT0(MODBUS_USART0_ADDR) &=
+		~(USART_STAT0_PERR | USART_STAT0_FERR | USART_STAT0_NERR |
+		  USART_STAT0_ORERR);
+}
 
 void reset_rx_dma()
 {
@@ -104,9 +112,42 @@ void reset_rx_dma()
 	rx_dma_consumed = 0U;
 }
 
+bool consume_rx_dma()
+{
+	if (!rx_dma_enabled)
+		return false;
 
+	const uint32_t remaining = dma_transfer_number_get(DMA1, DMA_CH2);
+	if (remaining > rx_dma_capacity)
+		return false;
 
+	const uint16_t received =
+		static_cast<uint16_t>(rx_dma_capacity - remaining);
+	if (received <= rx_dma_consumed)
+		return false;
 
+	__DMB();
+	for (; rx_dma_consumed < received; ++rx_dma_consumed) {
+		/*
+		 * ASCII配置是7E1，GD32用8位字长承载7个数据位加1个校验位。DMA直接读DATA时
+		 * 第8位可能带着校验位，所以ASCII入栈前只保留低7位；RTU 8E1必须保留8位。
+		 */
+		const uint8_t byte = ModbusConfig::mode == ModbusSerialMode::ascii ?
+					     rx_dma_buffer[rx_dma_consumed] & 0x7FU :
+					     rx_dma_buffer[rx_dma_consumed];
+		if (!push_rx_event(RxEventType::byte,
+				   byte))
+			break;
+	}
+	return true;
+}
+
+void rearm_rx_dma()
+{
+	reset_rx_dma();
+	if (rx_dma_enabled)
+		dma_channel_enable(DMA1, DMA_CH2);
+}
 
 void configure_rx_dma()
 {
@@ -141,51 +182,6 @@ constexpr eMBParity configured_parity()
 		return MB_PAR_EVEN;
 	return MB_PAR_NONE;
 }
-}
-
-void clear_usart_rx_status()
-{
-	// GD32要求按“读STAT0再读DATA”的顺序清IDLE及部分接收状态，随后清错误位。
-	(void)USART_STAT0(MODBUS_USART0_ADDR);
-	(void)USART_DATA(MODBUS_USART0_ADDR);
-	USART_STAT0(MODBUS_USART0_ADDR) &=
-		~(USART_STAT0_PERR | USART_STAT0_FERR | USART_STAT0_NERR |
-		  USART_STAT0_ORERR);
-}
-bool consume_rx_dma()
-{
-	if (!rx_dma_enabled)
-		return false;
-
-	const uint32_t remaining = dma_transfer_number_get(DMA1, DMA_CH2);
-	if (remaining > rx_dma_capacity)
-		return false;
-
-	const uint16_t received =
-		static_cast<uint16_t>(rx_dma_capacity - remaining);
-	if (received <= rx_dma_consumed)
-		return false;
-
-	__DMB();
-	for (; rx_dma_consumed < received; ++rx_dma_consumed) {
-		/*
-		 * ASCII配置是7E1，GD32用8位字长承载7个数据位加1个校验位。DMA直接读DATA时
-		 * 第8位可能带着校验位，所以ASCII入栈前只保留低7位；RTU 8E1必须保留8位。
-		 */
-		const uint8_t byte =
-			ModbusConfig::mode == ModbusSerialMode::ascii ?
-				rx_dma_buffer[rx_dma_consumed] & 0x7FU :
-				rx_dma_buffer[rx_dma_consumed];
-		if (!push_rx_event(RxEventType::byte, byte))
-			break;
-	}
-	return true;
-}
-void rearm_rx_dma()
-{
-	reset_rx_dma();
-	if (rx_dma_enabled)
-		dma_channel_enable(DMA1, DMA_CH2);
 }
 
 extern "C" BOOL xMBPortSerialInit(UCHAR port, ULONG baudrate, UCHAR data_bits,
@@ -411,6 +407,27 @@ extern "C" void vMBPortTimersDelay(USHORT timeout_ms)
 	}
 }
 
+extern "C" void USART0_IRQHandler(void)
+{
+	const uint32_t status = USART_STAT0(MODBUS_USART0_ADDR);
+	if ((status & USART_STAT0_IDLEF) != 0U &&
+	    (USART_CTL0(MODBUS_USART0_ADDR) & USART_CTL0_IDLEIE) != 0U) {
+		// IDLE约一个字符时间就会到，这里只收割DMA；真正RTU帧结束仍由TIMER6 t3.5判断。
+		clear_usart_rx_status();
+		dma_channel_disable(DMA1, DMA_CH2);
+		const bool bytes_received = consume_rx_dma();
+		rearm_rx_dma();
+		if (bytes_received)
+			vMBPortTimersEnable();
+	} else if ((status & (USART_STAT0_PERR | USART_STAT0_FERR |
+			      USART_STAT0_NERR | USART_STAT0_ORERR)) != 0U) {
+		clear_usart_rx_status();
+	}
+
+	if (usart_interrupt_flag_get(MODBUS_USART0_ADDR, USART_INT_FLAG_TBE) == SET &&
+	    pxMBFrameCBTransmitterEmpty != nullptr)
+		(void)pxMBFrameCBTransmitterEmpty();
+}
 
 extern "C" void TIMER6_IRQHandler(void)
 {

@@ -73,14 +73,7 @@ using Scheduler = StaticTimerManager<
 	systick_get_ms,
 
 	// 5ms: 协议轮询与命令分发
-	TaskConfig{ 5,
-		    [] {
-			    if (g_device.params_.use_factory_mode) {
-				    g_device.poll_frame();
-			    } else {
-				    modbus_slave_poll();
-			    }
-		    } },
+	TaskConfig{ 5, [] { g_device.poll_frame(); } },
 
 	// 10ms: 告警扫描
 	TaskConfig{ 10, [] { g_device.alarm_scan(); } },
@@ -115,11 +108,6 @@ using Scheduler = StaticTimerManager<
 		   } }>;
 
 // ===================== main 入口 =====================
-
-extern void clear_usart_rx_status();
-extern bool consume_rx_dma();
-extern void rearm_rx_dma();
-
 extern "C" {
 int main(void)
 {
@@ -154,6 +142,7 @@ int main(void)
 		}
 	}
 	while (1) {
+		modbus_slave_poll();
 		Scheduler::poll();
 	}
 }
@@ -167,42 +156,6 @@ void USART1_IRQHandler()
 		Uart1RB::write_byte(byte);
 	}
 }
-
-
-void USART0_IRQHandler(void)
-{
-	const uint32_t status = USART_STAT0(MODBUS_USART0_ADDR);
-	if (g_device.params_.use_factory_mode) {
-		if (usart_interrupt_flag_get(MODBUS_USART0_ADDR,
-					     USART_INT_FLAG_RBNE) == SET) {
-			const uint8_t byte =
-				usart_data_receive(MODBUS_USART0_ADDR);
-			Uart1RB::write_byte(byte);
-		}
-	} else {
-		if ((status & USART_STAT0_IDLEF) != 0U &&
-		    (USART_CTL0(MODBUS_USART0_ADDR) & USART_CTL0_IDLEIE) !=
-			    0U) {
-			// IDLE约一个字符时间就会到，这里只收割DMA；真正RTU帧结束仍由TIMER6 t3.5判断。
-			clear_usart_rx_status();
-			dma_channel_disable(DMA1, DMA_CH2);
-			const bool bytes_received = consume_rx_dma();
-			rearm_rx_dma();
-			if (bytes_received)
-				vMBPortTimersEnable();
-		} else if ((status & (USART_STAT0_PERR | USART_STAT0_FERR |
-				      USART_STAT0_NERR | USART_STAT0_ORERR)) !=
-			   0U) {
-			clear_usart_rx_status();
-		}
-
-		if (usart_interrupt_flag_get(MODBUS_USART0_ADDR,
-					     USART_INT_FLAG_TBE) == SET &&
-		    pxMBFrameCBTransmitterEmpty != nullptr)
-			(void)pxMBFrameCBTransmitterEmpty();
-	}
-}
-
 
 void SysTick_Handler()
 {
