@@ -33,7 +33,7 @@ inline constexpr uint8_t slave_address = 1;
 inline constexpr uint8_t serial_port = 0;
 inline constexpr uint32_t baudrate = 19200;
 // 当前默认RTU 8E1；ASCII模式下同一个配置对应7E1。
-inline constexpr ModbusSerialParity parity = ModbusSerialParity::even;
+inline constexpr ModbusSerialParity parity = ModbusSerialParity::none;
 // 只影响uint32/float的两个16位字顺序，不改变单个寄存器内部的高字节先发规则。
 inline constexpr ModbusWordOrder word_order = ModbusWordOrder::high_word_first;
 

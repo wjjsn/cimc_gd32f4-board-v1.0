@@ -15,7 +15,7 @@ inline void send_with_485(const uint8_t *binary, uint16_t len)
 		hex_buf[i * 2 + 1] = hex_chars[binary[i] & 0x0F];
 	}
 	CS_485::set();
-	USART1::transmit(hex_buf, len * 2);
+	MODBUS_USART0::transmit(hex_buf, len * 2);
 	CS_485::clear();
 }
 
@@ -23,8 +23,8 @@ inline void send_with_485(const uint8_t *binary, uint16_t len)
 inline void send_with_485(const char *str)
 {
 	CS_485::set();
-	USART1::transmit(reinterpret_cast<const uint8_t *>(str),
-			 std::strlen(str));
+	MODBUS_USART0::transmit(reinterpret_cast<const uint8_t *>(str),
+				std::strlen(str));
 	CS_485::clear();
 }
 
@@ -32,7 +32,7 @@ inline void send_with_485(const char *str)
 inline void send_raw_485(const uint8_t *data, uint16_t len)
 {
 	CS_485::set();
-	USART1::transmit(data, len);
+	MODBUS_USART0::transmit(data, len);
 	CS_485::clear();
 }
 
