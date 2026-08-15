@@ -1,3 +1,7 @@
 [submodule "common/freemodbus"]
 	path = common/freemodbus
 	url = https://github.com/cwalter-at/freemodbus.git
+[submodule "common/FatFs"]
+	path = common/FatFs
+	url = https://github.com/pabigot/FatFs.git
+	branch = ff/master

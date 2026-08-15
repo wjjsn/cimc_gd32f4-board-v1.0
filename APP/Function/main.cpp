@@ -6,6 +6,7 @@
 #include "modbus_app.hpp"
 #include "modbus_config.hpp"
 #include "modbus_slave.hpp"
+#include "sd_storage.h"
 
 extern "C" {
 #include "mb.h"
@@ -98,6 +99,10 @@ extern "C" {
 int main(void)
 {
 	device_init_all();
+	// 挂载 SD 卡；成功后执行会写卡的完整自检。生产环境若不希望每次启动写卡，
+	// 保留 sd_storage_init()，删除或改为按命令触发 sd_storage_self_test()。
+	if (sd_storage_init() == 0)
+		(void)sd_storage_self_test();
 
 	// 初始化环形缓冲区
 	Uart1RB::init();

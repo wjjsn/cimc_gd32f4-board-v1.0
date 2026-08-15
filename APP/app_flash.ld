@@ -132,6 +132,26 @@ SECTIONS
     _edata = .;
   } > RAM AT> FLASH
 
+  /*
+   * picolibc 将 errno 等状态声明为 TLS。裸机只有一个线程，但仍必须为 .tbss
+   * 分配真实 RAM；否则 ld.bfd 不推进地址，TLS 会与后面的普通 .bss 重叠。
+   */
+  .tbss (NOLOAD) :
+  {
+    . = ALIGN(8);
+    __tls_base = .;
+    __tbss_start = .;
+    *(.tbss)
+    *(.tbss*)
+    *(.tcommon)
+    __tbss_end = .;
+  } > RAM
+
+  .tbss_space (NOLOAD) :
+  {
+    . = ADDR(.tbss) + SIZEOF(.tbss);
+  } > RAM
+
   /* provide some necessary symbols for uninitialized data */
   . = ALIGN(4);
   .bss :

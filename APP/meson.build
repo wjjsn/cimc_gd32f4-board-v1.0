@@ -14,6 +14,7 @@ subdir('Driver'/'Hardware')
 subdir('SEGGER_RTT')
 subdir('template_schedule')
 subdir('FreeModbus')
+subdir('Storage')
 
 dependencies = [
   dependency('HAL'),
@@ -23,6 +24,7 @@ dependencies = [
   dependency('SEGGER_RTT'),
   dependency('template_schedule'),
   dependency('FreeModbus'),
+  dependency('sd_storage'),
 ]
 
 lds = meson.current_source_dir()/'app_flash.ld'
