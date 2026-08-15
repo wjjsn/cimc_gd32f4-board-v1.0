@@ -8,6 +8,8 @@
 #include "modbus_slave.hpp"
 #include "sd_storage.h"
 
+#include "button_task.hpp"
+
 extern "C" {
 #include "mb.h"
 }
@@ -92,7 +94,18 @@ using Scheduler = StaticTimerManager<
 	TaskConfig{ 1000, [] { system_status_led::toggle(); } },
 
 	// 1000ms: 心跳
-	TaskConfig{ 1000, [] { g_device.try_heartbeat(systick_tick_ms); } }>;
+	TaskConfig{ 1000, [] { g_device.try_heartbeat(systick_tick_ms); } },
+	TaskConfig{ 20,
+		    [] {
+			    key1::detect_key_click();
+			    key2::detect_key_click();
+			    key3::detect_key_click();
+		    } },
+	TaskConfig{ 200, [] {
+			   key1::cope_click_data();
+			   key2::cope_click_data();
+			   key3::cope_click_data();
+		   } }>;
 
 // ===================== main 入口 =====================
 extern "C" {
@@ -101,8 +114,7 @@ int main(void)
 	device_init_all();
 	// 挂载 SD 卡；成功后执行会写卡的完整自检。生产环境若不希望每次启动写卡，
 	// 保留 sd_storage_init()，删除或改为按命令触发 sd_storage_self_test()。
-	if (sd_storage_init() == 0)
-		(void)sd_storage_self_test();
+	sd_storage_init();
 
 	// 初始化环形缓冲区
 	Uart1RB::init();
@@ -129,7 +141,6 @@ int main(void)
 			__asm volatile("BKPT #0");
 		}
 	}
-	NVIC_SetPriority(SysTick_IRQn, 3U);
 	while (1) {
 		modbus_slave_poll();
 		Scheduler::poll();
