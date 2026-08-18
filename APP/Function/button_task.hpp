@@ -23,6 +23,34 @@ inline void enter_normal_mode()
 
 inline  void save_to_tfcard()
 {
+	FILE *file = fopen("/sd/Config.ini", "aw");
+	if (file == NULL)
+		return;
+
+	if (fprintf(file,
+		    "[info]\n"
+		    "dID=%d\n"
+		    "[ratio]\n"
+		    "CH0=%f\n"
+		    "CH1=%f\n"
+		    "CH2=%f\n"
+		    "[limit]\n"
+		    "CH0=%f\n"
+		    "CH1=%f\n"
+		    "CH2=%f\n",
+		    g_device.params_.device_id, g_device.params_.ch0_ratio,
+		    g_device.params_.ch1_ratio, 0.0,
+		    g_device.params_.ch0_threshold,
+		    g_device.params_.ch1_threshold,
+		    g_device.params_.ch2_threshold) < 0) {
+		(void)fclose(file);
+		return;
+	}
+	if (fflush(file) != 0) {
+		(void)fclose(file);
+		return;
+	}
+	fclose(file);
 	SEGGER_RTT_WriteString(0, "save_to_tfcard OK\r\n");
 }
 

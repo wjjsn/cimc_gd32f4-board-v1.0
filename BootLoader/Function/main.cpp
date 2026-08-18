@@ -68,7 +68,7 @@ constexpr uint32_t STAGING_SIZE = 7 * 1024;
 constexpr uint32_t SLICE_SIZE = 256;
 constexpr uint32_t MAGIC_WORD =
 	0x3CC3A55A; // ARM是小端序，《0x5AA5C33C》是错的;
-constexpr uint32_t BOOT_TIMEOUT_S = 5;
+constexpr uint32_t BOOT_TIMEOUT_S = 10;
 constexpr uint32_t UPGRADE_TIMEOUT_S = 10;
 
 #define BOOTLOADER_FLAG_ADDR ((volatile uint32_t *)0x40024000)
